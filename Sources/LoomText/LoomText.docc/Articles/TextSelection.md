@@ -33,6 +33,16 @@ what gets copied is exactly what is on screen. Attachments copy as
 their ``LoomTextAttachment/altText`` (e.g. `"[表情]"`) — or are
 stripped when they provide none (`LoomTextLayout/plainText(in:)`).
 
+## Theming
+
+Selection chrome — the tinted fill (20% alpha) and both handles —
+follows the label's standard `tintColor`. On saturated backgrounds
+(e.g. the blue outgoing bubble of a chat) set a contrasting tint:
+
+```swift
+bubbleLabel.tintColor = .white   // iMessage-style chrome on blue
+```
+
 ## Menu customization
 
 ```swift

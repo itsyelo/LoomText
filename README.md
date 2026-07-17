@@ -130,7 +130,9 @@ label.selectionDidChange = { range in /* nil = dismissed */ }
 Selection never touches the render pipeline: the tint and handles are
 an overlay, dragging at 60 Hz costs two shape-layer updates. Copy
 respects what is visible — text hidden behind a truncation token is
-neither selectable nor copied.
+neither selectable nor copied, and attachments copy as their
+`altText`. Selection chrome follows `tintColor` — set
+`label.tintColor = .white` on saturated chat bubbles.
 
 ## Using with Loom
 

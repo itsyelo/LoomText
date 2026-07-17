@@ -148,6 +148,9 @@ private final class ChatBubbleCell: UITableViewCell {
         avatar.backgroundColor = vm.isOutgoing ? .systemTeal : .systemIndigo // placeholder while loading / offline
         avatar.sd_setImage(with: vm.avatarURL)
         bubble.backgroundColor = vm.isOutgoing ? .systemBlue : .secondarySystemFill
+        // Selection chrome (tint + handles) follows tintColor — the
+        // default blue would vanish on the blue outgoing bubble.
+        body.tintColor = vm.isOutgoing ? .white : .systemBlue
         body.textLayout = vm.textLayout
         avatar.frame = vm.result.frame(for: ChatKey.avatar) ?? .zero
         bubble.frame = vm.result.frame(for: ChatKey.bubble) ?? .zero
