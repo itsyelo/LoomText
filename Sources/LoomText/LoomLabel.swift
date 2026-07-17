@@ -50,6 +50,9 @@ public final class LoomLabel: UIView {
             internalText = nil
             lastBuiltSize = .zero
             layoutStorage = newValue
+            if #available(iOS 16.0, *) {
+                selectionController?.layoutDidChange()
+            }
             invalidateIntrinsicContentSize()
             invalidateAccessibilityElements()
             layer.setNeedsDisplay()
@@ -98,6 +101,68 @@ public final class LoomLabel: UIView {
     /// How long a press must hold to count as a long press.
     public var longPressDuration: TimeInterval = 0.5
 
+    // MARK: - Text selection (iOS 16+)
+
+    /// Enables WeChat/Telegram-style read-only selection: long-press to
+    /// select (see ``selectionInitialRange``), drag the handles to
+    /// adjust. Selection chrome is an overlay — the async render
+    /// pipeline is never involved.
+    ///
+    /// Long-press priority: a press on a ``LoomTextHighlight`` range
+    /// still fires ``highlightLongPressAction`` when one is set;
+    /// without one, the long-press starts a selection instead.
+    @available(iOS 16.0, *)
+    public var isTextSelectionEnabled: Bool {
+        get { selectionStorage != nil }
+        set {
+            if newValue, selectionStorage == nil {
+                selectionStorage = LoomTextSelectionController(label: self)
+            } else if !newValue, let controller = selectionController {
+                controller.tearDown()
+                selectionStorage = nil
+            }
+        }
+    }
+
+    /// What a fresh long-press selects (default `.all`). Set after
+    /// enabling ``isTextSelectionEnabled`` — disabling discards it.
+    @available(iOS 16.0, *)
+    public var selectionInitialRange: LoomTextSelectionInitialRange {
+        get { selectionController?.initialRange ?? .all }
+        set { selectionController?.initialRange = newValue }
+    }
+
+    /// The current selection in `textLayout.text` UTF-16 indices, or
+    /// `nil` when nothing is selected.
+    @available(iOS 16.0, *)
+    public var selectedRange: NSRange? { selectionController?.selectedRange }
+
+    /// Fires on every selection change, including drags; `nil` means
+    /// the selection was dismissed.
+    @available(iOS 16.0, *)
+    public var selectionDidChange: ((NSRange?) -> Void)? {
+        get { selectionController?.didChange }
+        set { selectionController?.didChange = newValue }
+    }
+
+    /// Programmatically selects all selectable text (also the "Select
+    /// All" menu entry point).
+    @available(iOS 16.0, *)
+    public func selectAll() {
+        selectionController?.selectAll()
+    }
+
+    /// Dismisses the selection, if any.
+    @available(iOS 16.0, *)
+    public func clearSelection() {
+        selectionController?.clear()
+    }
+
+    @available(iOS 16.0, *)
+    var selectionController: LoomTextSelectionController? {
+        selectionStorage as? LoomTextSelectionController
+    }
+
     /// Movement beyond this distance cancels the highlight (the touch is
     /// handed to scrolling).
     private static let highlightMoveCancelDistance: CGFloat = 9
@@ -107,6 +172,9 @@ public final class LoomLabel: UIView {
     private var layoutStorage: LoomTextLayout?
     private var internalText: NSAttributedString?
     private var lastBuiltSize: CGSize = .zero
+    /// `LoomTextSelectionController` on iOS 16+ — stored untyped because
+    /// stored properties cannot carry availability.
+    private var selectionStorage: AnyObject?
 
     private var pressedLayout: LoomTextLayout?
     private var mountedAttachmentViews: [(view: UIView, attachment: LoomTextAttachment)] = []
@@ -170,6 +238,10 @@ public final class LoomLabel: UIView {
         if let scale = window?.screen.scale, scale > 0 {
             contentScaleFactor = scale
         }
+        // Leaving the window (cell reuse, dismissal) drops the selection.
+        if window == nil, #available(iOS 16.0, *) {
+            selectionController?.clear()
+        }
     }
 
     /// Direct mode reports the layout's bounding size. Convenience mode
@@ -203,6 +275,11 @@ public final class LoomLabel: UIView {
             return
         }
         let point = touch.location(in: self)
+        // An active selection owns every touch: taps outside dismiss it,
+        // taps inside are menu territory. Highlights resume afterwards.
+        if #available(iOS 16.0, *), let controller = selectionController, controller.isActive {
+            if controller.handleTouchesBegan(at: point) { return }
+        }
         let isToken: Bool
         let hit: (highlight: LoomTextHighlight, range: NSRange)
         if let inline = layout.highlight(at: point) {
@@ -212,6 +289,10 @@ public final class LoomLabel: UIView {
             hit = token
             isToken = true
         } else {
+            if #available(iOS 16.0, *), let controller = selectionController,
+                controller.handleTouchesBegan(at: point) {
+                return
+            }
             super.touchesBegan(touches, with: event)
             return
         }
@@ -224,6 +305,12 @@ public final class LoomLabel: UIView {
     }
 
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if #available(iOS 16.0, *), let controller = selectionController, controller.isTrackingPress {
+            if let touch = touches.first {
+                controller.handleTouchesMoved(to: touch.location(in: self))
+            }
+            return
+        }
         guard trackedHighlight != nil, let touch = touches.first else {
             super.touchesMoved(touches, with: event)
             return
@@ -236,6 +323,10 @@ public final class LoomLabel: UIView {
     }
 
     public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if #available(iOS 16.0, *), let controller = selectionController, controller.isTrackingPress {
+            controller.handleTouchesEnded()
+            return
+        }
         guard let hit = trackedHighlight else {
             super.touchesEnded(touches, with: event)
             return
@@ -275,11 +366,25 @@ public final class LoomLabel: UIView {
     }
 
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if #available(iOS 16.0, *), let controller = selectionController, controller.isTrackingPress {
+            controller.handleTouchesCancelled()
+            return
+        }
         if trackedHighlight != nil {
             cancelHighlightTracking()
         } else {
             super.touchesCancelled(touches, with: event)
         }
+    }
+
+    /// The handle knobs poke a few points outside the label on the first
+    /// and last lines — keep them tappable.
+    public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if #available(iOS 16.0, *), let controller = selectionController,
+            controller.handleHitTest(point) {
+            return true
+        }
+        return super.point(inside: point, with: event)
     }
 
     private func startLongPressTimer() {
@@ -289,6 +394,15 @@ public final class LoomLabel: UIView {
             MainActor.assumeIsolated {
                 guard let self, let hit = self.trackedHighlight, let layout = self.layoutStorage else { return }
                 self.longPressFired = true
+                // Priority policy: a highlight long-press action wins;
+                // without one, the long-press starts a selection.
+                if self.highlightLongPressAction == nil, #available(iOS 16.0, *),
+                    let controller = self.selectionController {
+                    let point = self.touchBeganPoint
+                    self.cancelHighlightTracking()
+                    controller.beginSelection(at: point)
+                    return
+                }
                 if self.trackedHighlightIsToken {
                     if let token = layout.resolvedTruncationToken, let rect = layout.truncationTokenRect {
                         self.highlightLongPressAction?(self, token, hit.range, rect)
@@ -418,6 +532,10 @@ extension LoomLabel: LoomAsyncLayerDelegate {
                 contentLayer.frame = rect
                 mountedAttachmentLayers.append(contentLayer)
             }
+        }
+        // Freshly mounted views land above the selection chrome — restack.
+        if #available(iOS 16.0, *) {
+            selectionController?.bringChromeToFront()
         }
     }
 }

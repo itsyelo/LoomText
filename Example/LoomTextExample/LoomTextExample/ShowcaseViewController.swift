@@ -84,6 +84,9 @@ final class ShowcaseViewController: UIViewController {
         expandableLabel.highlightTapAction = { [weak self] _, _, _, _ in
             self?.toggleExpanded()
         }
+        // Long-press selects (token highlight has no long-press action,
+        // so selection takes the long-press per the priority policy).
+        expandableLabel.isTextSelectionEnabled = true
         stack.addArrangedSubview(expandableLabel)
 
         // Card 2 — pressed highlights.
