@@ -61,6 +61,9 @@ final class LoomTextSelectionController: NSObject {
     private var observedScrollPan: UIPanGestureRecognizer?
     private var dismissTap: UITapGestureRecognizer?
     private var menuInteraction: UIEditMenuInteraction?
+    /// `UITextLoupeSession` on iOS 17+ (stored untyped: no availability
+    /// on stored properties).
+    private var loupeSession: AnyObject?
 
     private var handlePans: [UIPanGestureRecognizer] = []
 
@@ -172,6 +175,7 @@ final class LoomTextSelectionController: NSObject {
     func clear() {
         cancelPressTracking()
         dragAnchor = nil
+        if #available(iOS 17.0, *) { endLoupe() }
         unobserveScrollView()
         removeDismissTap()
         dismissMenu()
@@ -222,13 +226,43 @@ final class LoomTextSelectionController: NSObject {
         switch pan.state {
         case .began:
             beginHandleDrag(isStart: pan.view === overlay.startHandle)
+            if #available(iOS 17.0, *) { beginLoupe(at: point, widget: pan.view) }
         case .changed:
             updateHandleDrag(to: point)
+            if #available(iOS 17.0, *) { moveLoupe(to: point) }
         case .ended, .cancelled, .failed:
+            if #available(iOS 17.0, *) { endLoupe() }
             endHandleDrag()
         default:
             break
         }
+    }
+
+    // MARK: Loupe (iOS 17+ — no public magnifier API below)
+
+    @available(iOS 17.0, *)
+    private func beginLoupe(at point: CGPoint, widget: UIView?) {
+        // Same hang-safety rule as the edit menu: never against a
+        // scene-less window (unit-test hosts).
+        guard label.window?.windowScene != nil else { return }
+        loupeSession = UITextLoupeSession.begin(at: point, fromSelectionWidgetView: widget, in: label)
+    }
+
+    @available(iOS 17.0, *)
+    private func moveLoupe(to point: CGPoint) {
+        guard let session = loupeSession as? UITextLoupeSession else { return }
+        var caret = CGRect(x: point.x - 1, y: point.y - 10, width: 2, height: 20)
+        if let layout = label.textLayout, let lineIndex = layout.closestLineIndex(to: point) {
+            let bounds = layout.lines[lineIndex].bounds
+            caret = CGRect(x: point.x - 1, y: bounds.minY, width: 2, height: bounds.height)
+        }
+        session.move(to: point, withCaretRect: caret, trackingCaret: true)
+    }
+
+    @available(iOS 17.0, *)
+    private func endLoupe() {
+        (loupeSession as? UITextLoupeSession)?.invalidate()
+        loupeSession = nil
     }
 
     // MARK: Chrome

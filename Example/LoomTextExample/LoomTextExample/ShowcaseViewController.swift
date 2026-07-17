@@ -145,7 +145,22 @@ final class ShowcaseViewController: UIViewController {
         )
         stack.addArrangedSubview(stickerLabel)
 
-        // Card 5 — toggles.
+        // Card 5 — text selection in .word mode (the expandable card
+        // above demonstrates .all).
+        stack.addArrangedSubview(header("文本选择：长按选词（.word）、拖手柄、菜单复制"))
+        let selectionLabel = LoomLabel()
+        let selectionText = DemoText.body(
+            "长按任意词开始选择：今天天气真好 CJK 按词切分，emoji 👨‍👩‍👧‍👦 不会被劈开，"
+                + "English words select whole. 拖动手柄调整选区，菜单里拷贝验证剪贴板。"
+        )
+        selectionLabel.textLayout = LoomTextLayout(
+            containerSize: CGSize(width: width, height: 300), text: selectionText
+        )
+        selectionLabel.isTextSelectionEnabled = true
+        selectionLabel.selectionInitialRange = .word
+        stack.addArrangedSubview(selectionLabel)
+
+        // Card 6 — toggles.
         stack.addArrangedSubview(header("渲染开关"))
         stack.addArrangedSubview(toggleRow(title: "异步绘制（displaysAsynchronously）", isOn: true) {
             [weak self] isOn in

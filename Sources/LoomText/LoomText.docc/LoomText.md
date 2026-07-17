@@ -36,6 +36,7 @@ double typesetting and no cross-engine alignment residual.
 
 - ``LoomTextHighlight``
 - ``LoomTextBackground``
+- ``LoomTextSelectionInitialRange``
 
 ### Attachments
 
@@ -46,4 +47,5 @@ double typesetting and no cross-engine alignment residual.
 
 - <doc:GettingStarted>
 - <doc:AsyncRendering>
+- <doc:TextSelection>
 - <doc:LoomIntegration>

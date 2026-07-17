@@ -125,6 +125,21 @@ private final class ChatBubbleCell: UITableViewCell {
         contentView.addSubview(avatar)
         contentView.addSubview(bubble)
         contentView.addSubview(body)
+
+        // WeChat-style bubble selection: long-press selects the whole
+        // message, handles shrink it, the menu carries a host-injected
+        // "转发" next to the system Copy.
+        body.isTextSelectionEnabled = true
+        body.additionalEditMenuItems = { [weak body] range in
+            [UIAction(title: "转发") { _ in
+                guard let body, let layout = body.textLayout else { return }
+                let text = layout.plainText(in: range)
+                body.clearSelection()
+                let alert = UIAlertController(title: "转发", message: text, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                body.window?.rootViewController?.present(alert, animated: true)
+            }]
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("unused") }

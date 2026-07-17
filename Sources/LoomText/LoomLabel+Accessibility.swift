@@ -53,6 +53,27 @@ extension LoomLabel {
         set {}
     }
 
+    /// Selection-enabled labels offer "Copy" as a VoiceOver custom
+    /// action — the whole selectable text, no visual selection needed.
+    public override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get { selectionCopyActions() }
+        set {}
+    }
+
+    func selectionCopyActions() -> [UIAccessibilityCustomAction]? {
+        guard #available(iOS 16.0, *), selectionController != nil,
+              let layout = textLayout, layout.selectableRange.length > 0
+        else { return nil }
+        let action = UIAccessibilityCustomAction(name: "Copy") { [weak self] _ in
+            guard #available(iOS 16.0, *), let self, let controller = self.selectionController,
+                  let layout = self.textLayout
+            else { return false }
+            controller.copySink(layout.plainText(in: layout.selectableRange))
+            return true
+        }
+        return [action]
+    }
+
     /// Whether the layout carries tappable ranges (inline highlights in
     /// the visible range, or a highlighted truncation token).
     var hasInteractiveContent: Bool {
@@ -100,6 +121,9 @@ extension LoomLabel {
                 } else {
                     element.accessibilityTraits = .staticText
                 }
+                // Container mode hides the label element itself — expose
+                // the copy action on every child element instead.
+                element.accessibilityCustomActions = selectionCopyActions()
                 elements.append(element)
             }
         }

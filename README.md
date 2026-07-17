@@ -11,6 +11,7 @@ Sister library of [Loom](https://github.com/itsyelo/Loom): Loom calculates layou
 - **Async rendering** — background rasterization with sentinel cancellation and run-loop-coalesced commits
 - **Custom truncation token** — attributed, tappable "… more"; collapsed and expanded prefixes are pixel-identical
 - **Highlights** — tappable / long-pressable ranges with a pressed state (`LoomTextHighlight`), including rounded capsule backgrounds (`LoomTextBackground`)
+- **Text selection** (iOS 16+) — WeChat/Telegram-style read-only selection: long-press to select, draggable handles with grapheme snapping, system edit menu (Copy / Select All + custom items), loupe on iOS 17+ — all as an overlay, the async pipeline stays untouched
 - **Attachments** — inline images, views, and layers via `CTRunDelegate`; mount/unmount hooks (`viewProvider` / `onViewUnmounted`) enable O(visible) view reuse pools for animated content
 - **Dynamic colors** — async bitmaps re-render on trait changes; dark mode just works
 - **Accessibility** — VoiceOver elements for text, links, and the truncation token
@@ -114,6 +115,22 @@ text.append(.loom_attachmentString(
     alignTo: font
 ))
 ```
+
+### Text selection (iOS 16+)
+
+```swift
+label.isTextSelectionEnabled = true    // long-press selects all (chat-bubble feel)
+label.selectionInitialRange = .word    // …or the word under the finger
+label.additionalEditMenuItems = { range in
+    [UIAction(title: "Forward") { _ in /* … */ }]
+}
+label.selectionDidChange = { range in /* nil = dismissed */ }
+```
+
+Selection never touches the render pipeline: the tint and handles are
+an overlay, dragging at 60 Hz costs two shape-layer updates. Copy
+respects what is visible — text hidden behind a truncation token is
+neither selectable nor copied.
 
 ## Using with Loom
 
