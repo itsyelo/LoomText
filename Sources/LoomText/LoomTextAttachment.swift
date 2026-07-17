@@ -45,6 +45,13 @@ public final class LoomTextAttachment: @unchecked Sendable {
     public let content: Any?
     public let verticalAlignment: LoomTextVerticalAlignment
 
+    /// Textual stand-in for the copy pipeline (and VoiceOver fallback):
+    /// what this attachment contributes to
+    /// ``LoomTextLayout/plainText(in:)`` — e.g. `"[表情]"` or the emoji
+    /// the sticker depicts. `nil` means the attachment copies as
+    /// nothing (the placeholder is stripped).
+    public let altText: String?
+
     #if canImport(UIKit)
     /// Called on the main thread each time the attachment mounts.
     /// Takes precedence over `content` for view mounting.
@@ -54,9 +61,14 @@ public final class LoomTextAttachment: @unchecked Sendable {
     /// the same instance `viewProvider` returned — the recycle hook.
     public let onViewUnmounted: (@MainActor (UIView) -> Void)?
 
-    public init(content: Any, verticalAlignment: LoomTextVerticalAlignment = .center) {
+    public init(
+        content: Any,
+        verticalAlignment: LoomTextVerticalAlignment = .center,
+        altText: String? = nil
+    ) {
         self.content = content
         self.verticalAlignment = verticalAlignment
+        self.altText = altText
         self.viewProvider = nil
         self.onViewUnmounted = nil
     }
@@ -64,17 +76,24 @@ public final class LoomTextAttachment: @unchecked Sendable {
     public init(
         viewProvider: @escaping @MainActor () -> UIView,
         onViewUnmounted: (@MainActor (UIView) -> Void)? = nil,
-        verticalAlignment: LoomTextVerticalAlignment = .center
+        verticalAlignment: LoomTextVerticalAlignment = .center,
+        altText: String? = nil
     ) {
         self.content = nil
         self.verticalAlignment = verticalAlignment
+        self.altText = altText
         self.viewProvider = viewProvider
         self.onViewUnmounted = onViewUnmounted
     }
     #else
-    public init(content: Any, verticalAlignment: LoomTextVerticalAlignment = .center) {
+    public init(
+        content: Any,
+        verticalAlignment: LoomTextVerticalAlignment = .center,
+        altText: String? = nil
+    ) {
         self.content = content
         self.verticalAlignment = verticalAlignment
+        self.altText = altText
     }
     #endif
 }
@@ -124,10 +143,13 @@ extension NSAttributedString {
         contentSize: CGSize,
         fontAscent: CGFloat,
         fontDescent: CGFloat,
-        verticalAlignment: LoomTextVerticalAlignment = .center
+        verticalAlignment: LoomTextVerticalAlignment = .center,
+        altText: String? = nil
     ) -> NSAttributedString {
         loom_attachmentString(
-            attachment: LoomTextAttachment(content: content, verticalAlignment: verticalAlignment),
+            attachment: LoomTextAttachment(
+                content: content, verticalAlignment: verticalAlignment, altText: altText
+            ),
             contentSize: contentSize,
             fontAscent: fontAscent,
             fontDescent: fontDescent
@@ -176,14 +198,16 @@ extension NSAttributedString {
         content: Any,
         contentSize: CGSize,
         alignTo font: CTFont,
-        verticalAlignment: LoomTextVerticalAlignment = .center
+        verticalAlignment: LoomTextVerticalAlignment = .center,
+        altText: String? = nil
     ) -> NSAttributedString {
         loom_attachmentString(
             content: content,
             contentSize: contentSize,
             fontAscent: CTFontGetAscent(font),
             fontDescent: CTFontGetDescent(font),
-            verticalAlignment: verticalAlignment
+            verticalAlignment: verticalAlignment,
+            altText: altText
         )
     }
 }
@@ -195,14 +219,16 @@ extension NSAttributedString {
         content: Any,
         contentSize: CGSize,
         alignTo font: UIFont,
-        verticalAlignment: LoomTextVerticalAlignment = .center
+        verticalAlignment: LoomTextVerticalAlignment = .center,
+        altText: String? = nil
     ) -> NSAttributedString {
         loom_attachmentString(
             content: content,
             contentSize: contentSize,
             fontAscent: font.ascender,
             fontDescent: -font.descender,
-            verticalAlignment: verticalAlignment
+            verticalAlignment: verticalAlignment,
+            altText: altText
         )
     }
 
@@ -214,12 +240,14 @@ extension NSAttributedString {
         onViewUnmounted: (@MainActor (UIView) -> Void)? = nil,
         contentSize: CGSize,
         alignTo font: UIFont,
-        verticalAlignment: LoomTextVerticalAlignment = .center
+        verticalAlignment: LoomTextVerticalAlignment = .center,
+        altText: String? = nil
     ) -> NSAttributedString {
         let attachment = LoomTextAttachment(
             viewProvider: viewProvider,
             onViewUnmounted: onViewUnmounted,
-            verticalAlignment: verticalAlignment
+            verticalAlignment: verticalAlignment,
+            altText: altText
         )
         return loom_attachmentString(
             attachment: attachment,

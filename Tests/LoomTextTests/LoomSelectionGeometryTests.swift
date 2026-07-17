@@ -201,6 +201,20 @@ final class LoomSelectionGeometryTests: XCTestCase {
         XCTAssertEqual(l.plainText(in: full), "pre  post")
     }
 
+    func testPlainTextUsesAltText() {
+        let text = NSMutableAttributedString(attributedString: attr("看这个 "))
+        text.append(.loom_attachmentString(
+            content: NSNull(), contentSize: CGSize(width: 24, height: 24),
+            fontAscent: 12, fontDescent: 4, altText: "[地球]"
+        ))
+        text.append(attr(" 转起来了"))
+        let l = LoomTextLayout(containerSize: CGSize(width: 10_000, height: 10_000), text: text)!
+        let full = NSRange(location: 0, length: text.length)
+        XCTAssertEqual(l.plainText(in: full), "看这个 [地球] 转起来了")
+        // A range ending before the attachment copies without it.
+        XCTAssertEqual(l.plainText(in: NSRange(location: 0, length: 3)), "看这个")
+    }
+
     func testPlainTextClampsAndEmpty() {
         let l = layout("abc")
         XCTAssertEqual(l.plainText(in: NSRange(location: 1, length: 99)), "bc")

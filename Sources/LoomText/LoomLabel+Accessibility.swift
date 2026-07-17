@@ -165,7 +165,7 @@ extension LoomLabel {
     // MARK: - Spoken text
 
     /// Plain text for VoiceOver: attachment placeholders (U+FFFC) speak
-    /// their content's `accessibilityLabel` when it has one.
+    /// their content's `accessibilityLabel`, falling back to `altText`.
     static func accessibleText(of layout: LoomTextLayout) -> String {
         accessibleText(of: layout, in: layout.visibleRange)
     }
@@ -180,7 +180,8 @@ extension LoomLabel {
             .loomTextAttachment, in: NSRange(location: 0, length: substring.length)
         ) { value, attachmentRange, _ in
             guard let attachment = value as? LoomTextAttachment else { return }
-            let spoken = (attachment.content as? NSObject)?.accessibilityLabel ?? ""
+            let spoken = (attachment.content as? NSObject)?.accessibilityLabel
+                ?? attachment.altText ?? ""
             replacements.append((attachmentRange, spoken))
         }
         let result = NSMutableString(string: substring.string)

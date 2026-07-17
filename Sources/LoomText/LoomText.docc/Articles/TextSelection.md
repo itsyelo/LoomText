@@ -29,8 +29,9 @@ two shape-layer updates.
 
 Selection respects visibility: the tail hidden behind an `.end`
 truncation token is excluded (`LoomTextLayout/selectableRange`), so
-what gets copied is exactly what is on screen, with attachment
-placeholders stripped (`LoomTextLayout/plainText(in:)`).
+what gets copied is exactly what is on screen. Attachments copy as
+their ``LoomTextAttachment/altText`` (e.g. `"[表情]"`) — or are
+stripped when they provide none (`LoomTextLayout/plainText(in:)`).
 
 ## Menu customization
 

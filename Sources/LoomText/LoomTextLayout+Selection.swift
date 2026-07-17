@@ -93,13 +93,30 @@ extension LoomTextLayout {
     }
 
     /// Plain text for the copy pipeline: the substring of `text` over
-    /// `range` (clamped to the string) with attachment placeholders
-    /// (U+FFFC) removed — an attachment has no textual equivalent yet.
+    /// `range` (clamped to the string), with each attachment placeholder
+    /// (U+FFFC) replaced by its ``LoomTextAttachment/altText`` — or
+    /// stripped when the attachment provides none.
     public func plainText(in range: NSRange) -> String {
         let plain = text.string as NSString
         let bounded = NSIntersectionRange(range, NSRange(location: 0, length: plain.length))
         guard bounded.length > 0 else { return "" }
-        return plain.substring(with: bounded).replacingOccurrences(of: "\u{FFFC}", with: "")
+        let substring = text.attributedSubstring(from: bounded)
+        guard substring.string.contains("\u{FFFC}") else { return substring.string }
+        // Collect first, replace back to front — replacements of a
+        // different length would shift the ranges mid-enumeration.
+        var replacements: [(NSRange, String)] = []
+        substring.enumerateAttribute(
+            .loomTextAttachment, in: NSRange(location: 0, length: substring.length)
+        ) { value, attachmentRange, _ in
+            guard let attachment = value as? LoomTextAttachment else { return }
+            replacements.append((attachmentRange, attachment.altText ?? ""))
+        }
+        let result = NSMutableString(string: substring.string)
+        for (attachmentRange, alt) in replacements.reversed() {
+            result.replaceCharacters(in: attachmentRange, with: alt)
+        }
+        // Placeholders without our attachment attribute still strip.
+        return (result as String).replacingOccurrences(of: "\u{FFFC}", with: "")
     }
 
     /// Normalizes a candidate selection: intersects it with

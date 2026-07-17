@@ -39,6 +39,15 @@ enum Sticker: String, CaseIterable {
             return URL(string: "https://raw.githubusercontent.com/SDWebImage/SDWebImage/master/Tests/Tests/Images/TestImage.gif")!
         }
     }
+
+    /// What the sticker copies as (and what VoiceOver falls back to).
+    var altText: String {
+        switch self {
+        case .earth: return "[地球]"
+        case .cradle: return "[牛顿摆]"
+        case .confetti: return "[彩带]"
+        }
+    }
 }
 
 /// Flavor B: a reuse pool for animated sticker views. Live views scale
@@ -91,7 +100,8 @@ extension NSAttributedString {
             viewProvider: { StickerViewPool.shared.dequeue(for: sticker) },
             onViewUnmounted: { StickerViewPool.shared.recycle($0) },
             contentSize: size,
-            alignTo: font
+            alignTo: font,
+            altText: sticker.altText
         )
     }
 
@@ -108,7 +118,8 @@ extension NSAttributedString {
         return .loom_attachmentString(
             viewProvider: { view },
             contentSize: size,
-            alignTo: font
+            alignTo: font,
+            altText: sticker.altText
         )
     }
 }
