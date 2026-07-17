@@ -33,11 +33,11 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/itsyelo/LoomText.git", branch: "main")
+    .package(url: "https://github.com/itsyelo/LoomText.git", from: "0.1.0")
 ]
 ```
 
-Or in Xcode: **File → Add Package Dependencies** → paste the URL. Version tags will follow once the API settles.
+Or in Xcode: **File → Add Package Dependencies** → paste the URL. Pre-1.0: minor versions may adjust APIs as feedback lands.
 
 Requires iOS 14+. The package also builds on macOS 12+ for headless layout tests; the rendering surface (`LoomLabel`) is UIKit-only. Zero dependencies — just CoreText and UIKit.
 
