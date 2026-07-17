@@ -46,6 +46,13 @@ public final class LoomTextLayout: @unchecked Sendable {
     /// Range of `text` visible in this layout.
     public let visibleRange: NSRange
 
+    /// The sub-range of `text` a user can visibly select. Equals
+    /// `visibleRange`, minus the last-line tail hidden behind an `.end`
+    /// truncation token (`visibleRange` keeps the full last-line range,
+    /// YYText parity — but those glyphs are not drawn). `.start`/`.middle`
+    /// truncation keeps `visibleRange` unchanged.
+    public let selectableRange: NSRange
+
     /// Union of line bounds, in container coordinates (insets included
     /// in position, not expanded).
     public let textBoundingRect: CGRect
@@ -229,6 +236,28 @@ public final class LoomTextLayout: @unchecked Sendable {
             visibleRange = NSRange(location: 0, length: 0)
         }
 
+        // Selection stops where the .end truncation token begins — the
+        // glyphs behind it are not drawn, so they must not be selectable.
+        var selectableRange = visibleRange
+        if needTruncation, container.truncationType == .end,
+            truncatedLine != nil, let tokenRect, let last = lines.last {
+            let localX = tokenRect.minX - last.position.x
+            let cut = CTLineGetStringIndexForPosition(last.ctLine, CGPoint(x: localX, y: 0))
+            if cut != kCFNotFound {
+                var bounded = max(visibleRange.location, min(cut, visibleRange.location + visibleRange.length))
+                let plain = textCopy.string as NSString
+                if bounded > 0, bounded < plain.length {
+                    // Snap down so the boundary never splits a cluster.
+                    let cluster = plain.rangeOfComposedCharacterSequence(at: bounded)
+                    if cluster.location < bounded { bounded = cluster.location }
+                }
+                selectableRange = NSRange(
+                    location: visibleRange.location,
+                    length: max(0, bounded - visibleRange.location)
+                )
+            }
+        }
+
         var allAttachments: [LoomTextAttachment] = []
         var allAttachmentRanges: [NSRange] = []
         var allAttachmentRects: [CGRect] = []
@@ -242,6 +271,7 @@ public final class LoomTextLayout: @unchecked Sendable {
         self.lines = lines
         self.rowCount = rowCount
         self.visibleRange = visibleRange
+        self.selectableRange = selectableRange
         self.textBoundingRect = textBoundingRect
         self.textBoundingSize = boundingSize
         self.isTruncated = needTruncation

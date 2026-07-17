@@ -44,4 +44,77 @@ extension LoomTextLayout {
         }
         return union
     }
+
+    // MARK: - Selection ranges (Task 15)
+
+    /// The composed character sequence (grapheme cluster) containing
+    /// `index`, or `nil` when `index` lies outside `text`.
+    public func graphemeClusterRange(at index: Int) -> NSRange? {
+        let plain = text.string as NSString
+        guard index >= 0, index < plain.length else { return nil }
+        return plain.rangeOfComposedCharacterSequence(at: index)
+    }
+
+    /// The locale-aware word containing `index` — CJK segments into
+    /// words, not single characters (`CFStringTokenizer`, word-boundary
+    /// units). Indices outside `selectableRange` clamp to its nearest
+    /// character. Where no word token exists (whitespace) or the token
+    /// is whitespace-only, the fallback is the grapheme cluster at
+    /// `index`. The result passes through
+    /// ``normalizedSelectionRange(for:)``; `nil` when nothing is
+    /// selectable.
+    public func wordRange(at index: Int) -> NSRange? {
+        let bounds = selectableRange
+        guard bounds.length > 0 else { return nil }
+        let plain = text.string as NSString
+        let clamped = max(bounds.location, min(index, bounds.location + bounds.length - 1))
+
+        let tokenizer = CFStringTokenizerCreate(
+            kCFAllocatorDefault,
+            plain as CFString,
+            CFRange(location: 0, length: plain.length),
+            kCFStringTokenizerUnitWordBoundary,
+            CFLocaleCopyCurrent()
+        )
+        var word: NSRange?
+        if !CFStringTokenizerGoToTokenAtIndex(tokenizer, clamped).isEmpty {
+            let tokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+            if tokenRange.location != kCFNotFound, tokenRange.length > 0 {
+                let candidate = NSRange(location: tokenRange.location, length: tokenRange.length)
+                let content = plain.substring(with: candidate)
+                if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    word = candidate
+                }
+            }
+        }
+        let resolved = word ?? graphemeClusterRange(at: clamped)
+        guard let resolved else { return nil }
+        return normalizedSelectionRange(for: resolved)
+    }
+
+    /// Normalizes a candidate selection: intersects it with
+    /// `selectableRange`, then expands both endpoints outward to
+    /// grapheme-cluster boundaries so composed sequences (ZWJ emoji,
+    /// combining marks) are never split. Returns `nil` when the
+    /// intersection is empty — a zero-length selection is "no
+    /// selection" for a read-only label.
+    public func normalizedSelectionRange(for range: NSRange) -> NSRange? {
+        let bounds = selectableRange
+        guard bounds.length > 0, range.location != NSNotFound else { return nil }
+        let plain = text.string as NSString
+        var start = max(range.location, bounds.location)
+        var end = min(range.location + range.length, bounds.location + bounds.length)
+        guard start < end, start < plain.length else { return nil }
+
+        start = plain.rangeOfComposedCharacterSequence(at: start).location
+        let endCluster = plain.rangeOfComposedCharacterSequence(at: end - 1)
+        end = endCluster.location + endCluster.length
+
+        // selectableRange endpoints are cluster boundaries themselves,
+        // so this re-clip is defensive only.
+        start = max(start, bounds.location)
+        end = min(end, bounds.location + bounds.length)
+        guard start < end else { return nil }
+        return NSRange(location: start, length: end - start)
+    }
 }
