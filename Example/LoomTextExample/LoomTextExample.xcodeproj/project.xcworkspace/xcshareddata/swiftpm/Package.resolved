@@ -1,0 +1,32 @@
+{
+  "pins" : [
+    {
+      "identity" : "loom",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/itsyelo/Loom.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "76c8b1c748c0531c72bafb323062fa80e0ef86ac"
+      }
+    },
+    {
+      "identity" : "sdwebimage",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SDWebImage/SDWebImage.git",
+      "state" : {
+        "revision" : "2de3a496eaf6df9a1312862adcfd54acd73c39c0",
+        "version" : "5.21.7"
+      }
+    },
+    {
+      "identity" : "yoga",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/facebook/yoga.git",
+      "state" : {
+        "revision" : "042f5013152eb81c1552dec945b88f7b95ca350f",
+        "version" : "3.2.1"
+      }
+    }
+  ],
+  "version" : 2
+}

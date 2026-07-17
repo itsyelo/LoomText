@@ -1,0 +1,40 @@
+name: LoomTextExample
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+packages:
+  LoomText:
+    path: ../..
+  Loom:
+    url: https://github.com/itsyelo/Loom.git
+    branch: main
+  SDWebImage:
+    url: https://github.com/SDWebImage/SDWebImage.git
+    from: 5.19.0
+
+targets:
+  LoomTextExample:
+    type: application
+    platform: iOS
+    sources:
+      - LoomTextExample
+    dependencies:
+      - package: LoomText
+      - package: Loom
+      - package: SDWebImage
+    # Bundle ID and signing live in Configs/*.xcconfig — target-level
+    # settings here would override them and kill Local.xcconfig.
+    configFiles:
+      Debug: Configs/Shared.xcconfig
+      Release: Configs/Shared.xcconfig
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "0.1"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"

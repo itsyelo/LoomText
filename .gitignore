@@ -1,0 +1,20 @@
+.DS_Store
+.build/
+build/
+Packages/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.swiftpm/
+
+# Local agent workspaces (issue investigations, planning notes, scratch).
+# Anything checked in goes under .agent/ instead.
+.agent.local/
+.claude/
+
+# Internal planning docs — kept local, not published.
+.plans/
+
+# Personal code-signing config for the example app.
+# Copy Local.xcconfig.template to Local.xcconfig for device builds.
+Example/LoomTextExample/Configs/Local.xcconfig

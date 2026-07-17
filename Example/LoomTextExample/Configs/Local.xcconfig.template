@@ -1,0 +1,15 @@
+// Personal signing overrides for device builds.
+//
+//   cp Local.xcconfig.template Local.xcconfig
+//
+// Local.xcconfig is gitignored; never commit personal signing info.
+// Find your Team ID at https://developer.apple.com/account (Membership).
+//
+// The [sdk=iphoneos*] scope keeps simulator builds on the default
+// bundle ID and automatic signing — only physical-device builds pick
+// up these overrides. Drop the scope if you want them everywhere.
+
+CODE_SIGN_STYLE[sdk=iphoneos*] = Manual
+DEVELOPMENT_TEAM[sdk=iphoneos*] = YOUR_TEAM_ID
+PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*] = your.device.bundle.id
+PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = Your Profile Name

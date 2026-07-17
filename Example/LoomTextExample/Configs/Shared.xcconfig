@@ -1,0 +1,13 @@
+// Shared build settings for the LoomTextExample target.
+// Personal signing lives in Local.xcconfig (gitignored) — copy
+// Local.xcconfig.template to Local.xcconfig and fill in your values.
+//
+// These keys stay out of project.yml on purpose: XcodeGen writes
+// project.yml settings into target-level buildSettings, which override
+// xcconfig values and would make Local.xcconfig overrides dead.
+
+PRODUCT_BUNDLE_IDENTIFIER = com.itsyelo.LoomTextExample
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
