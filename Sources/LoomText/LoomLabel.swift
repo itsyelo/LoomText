@@ -145,6 +145,15 @@ public final class LoomLabel: UIView {
         set { selectionController?.didChange = newValue }
     }
 
+    /// Extra edit-menu items appended after the system ones (Copy,
+    /// Select All) — forward/translate/share hooks for the host app.
+    /// Set after enabling ``isTextSelectionEnabled``.
+    @available(iOS 16.0, *)
+    public var additionalEditMenuItems: ((NSRange) -> [UIMenuElement])? {
+        get { selectionController?.additionalMenuItems }
+        set { selectionController?.additionalMenuItems = newValue }
+    }
+
     /// Programmatically selects all selectable text (also the "Select
     /// All" menu entry point).
     @available(iOS 16.0, *)
@@ -385,6 +394,48 @@ public final class LoomLabel: UIView {
             return true
         }
         return super.point(inside: point, with: event)
+    }
+
+    // MARK: - Standard edit actions (selection menu)
+
+    /// First-responder status only while a selection is active — it is
+    /// what routes the standard `copy:`/`selectAll:` commands into the
+    /// edit menu's suggested actions (with UIKit's own localization).
+    public override var canBecomeFirstResponder: Bool {
+        if #available(iOS 16.0, *), let controller = selectionController {
+            return controller.isActive
+        }
+        return false
+    }
+
+    public override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        // Overriding copy(_:)/selectAll(_:) makes UIResponder's default
+        // implementation report them as supported unconditionally — gate
+        // them on an active selection explicitly.
+        if action == #selector(copy(_:)) || action == #selector(selectAll(_:)) {
+            guard #available(iOS 16.0, *), let controller = selectionController,
+                controller.isActive
+            else { return false }
+            if action == #selector(copy(_:)) { return true }
+            // Offer Select All only while a smaller range is selected.
+            return controller.selectedRange != textLayout?.selectableRange
+        }
+        if #available(iOS 16.0, *), let controller = selectionController, controller.isActive {
+            return false
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    public override func copy(_ sender: Any?) {
+        if #available(iOS 16.0, *) {
+            selectionController?.copySelection()
+        }
+    }
+
+    public override func selectAll(_ sender: Any?) {
+        if #available(iOS 16.0, *) {
+            selectionController?.selectAll()
+        }
     }
 
     private func startLongPressTimer() {

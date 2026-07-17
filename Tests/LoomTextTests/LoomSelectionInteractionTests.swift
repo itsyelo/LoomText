@@ -227,6 +227,89 @@ final class LoomSelectionInteractionTests: XCTestCase {
         XCTAssertNil(observed.last!)
     }
 
+    // MARK: - Menu & standard edit actions (Task 17)
+
+    func testFirstResponderGatedOnActiveSelection() {
+        let label = makeLabel()
+        XCTAssertFalse(label.canBecomeFirstResponder)
+        label.selectAll()
+        XCTAssertTrue(label.canBecomeFirstResponder)
+        label.clearSelection()
+        XCTAssertFalse(label.canBecomeFirstResponder)
+    }
+
+    func testCanPerformActionMatrix() {
+        let label = makeLabel("Hello world selection")
+        // Inactive: nothing.
+        XCTAssertFalse(label.canPerformAction(#selector(UIResponderStandardEditActions.copy(_:)), withSender: nil))
+
+        // Partial selection: copy + select all.
+        label.selectionInitialRange = .word
+        label.selectionController?.beginSelection(at: midPoint(of: NSRange(location: 0, length: 5), in: label))
+        XCTAssertTrue(label.canPerformAction(#selector(UIResponderStandardEditActions.copy(_:)), withSender: nil))
+        XCTAssertTrue(label.canPerformAction(#selector(UIResponderStandardEditActions.selectAll(_:)), withSender: nil))
+        // Unrelated actions are rejected while active.
+        XCTAssertFalse(label.canPerformAction(#selector(UIResponderStandardEditActions.paste(_:)), withSender: nil))
+
+        // Full selection: no select-all entry.
+        label.selectAll()
+        XCTAssertTrue(label.canPerformAction(#selector(UIResponderStandardEditActions.copy(_:)), withSender: nil))
+        XCTAssertFalse(label.canPerformAction(#selector(UIResponderStandardEditActions.selectAll(_:)), withSender: nil))
+    }
+
+    func testCopySelectionUsesPlainTextAndClears() {
+        let label = makeLabel("Hello world selection")
+        label.selectionInitialRange = .word
+        label.selectionController?.beginSelection(at: midPoint(of: NSRange(location: 6, length: 5), in: label))
+        // The default sink writes UIPasteboard.general, which hangs in a
+        // scene-less test host — capture instead.
+        var copied: [String] = []
+        label.selectionController?.copySink = { copied.append($0) }
+        label.copy(nil)
+        XCTAssertEqual(copied, ["world"])
+        XCTAssertNil(label.selectedRange)
+    }
+
+    func testSelectAllStandardActionExpandsSelection() {
+        let label = makeLabel("Hello world selection")
+        label.selectionInitialRange = .word
+        label.selectionController?.beginSelection(at: midPoint(of: NSRange(location: 0, length: 5), in: label))
+        label.selectAll(nil)
+        XCTAssertEqual(label.selectedRange, label.textLayout!.selectableRange)
+    }
+
+    func testCopyStripsAttachmentPlaceholder() {
+        let text = NSMutableAttributedString(string: "GIF ", attributes: [
+            .font: UIFont.systemFont(ofSize: 16),
+        ])
+        text.append(.loom_attachmentString(
+            content: UIImage(), contentSize: CGSize(width: 16, height: 16),
+            alignTo: UIFont.systemFont(ofSize: 16)
+        ))
+        text.append(NSAttributedString(string: " done", attributes: [
+            .font: UIFont.systemFont(ofSize: 16),
+        ]))
+        let label = LoomLabel(frame: CGRect(x: 0, y: 0, width: 300, height: 40))
+        label.displaysAsynchronously = false
+        label.textLayout = LoomTextLayout(containerSize: CGSize(width: 300, height: 100), text: text)
+        label.isTextSelectionEnabled = true
+        label.selectAll()
+        var copied: [String] = []
+        label.selectionController?.copySink = { copied.append($0) }
+        label.copy(nil)
+        XCTAssertEqual(copied, ["GIF  done"])
+    }
+
+    func testAdditionalMenuItemsRoundTrip() {
+        let label = makeLabel()
+        label.additionalEditMenuItems = { range in
+            [UIAction(title: "Forward \(range.length)") { _ in }]
+        }
+        label.selectAll()
+        let items = label.selectionController?.additionalMenuItems?(label.selectedRange!)
+        XCTAssertEqual(items?.count, 1)
+    }
+
     // MARK: - Truncated layouts
 
     func testSelectAllStopsAtSelectableRangeWhenTruncated() {

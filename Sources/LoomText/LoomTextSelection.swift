@@ -36,6 +36,7 @@ final class LoomTextSelectionController: NSObject {
 
     var initialRange: LoomTextSelectionInitialRange = .all
     var didChange: ((NSRange?) -> Void)?
+    var additionalMenuItems: ((NSRange) -> [UIMenuElement])?
 
     private(set) var selectedRange: NSRange? {
         didSet {
@@ -59,6 +60,7 @@ final class LoomTextSelectionController: NSObject {
     private var dragAnchor: Int?
     private var observedScrollPan: UIPanGestureRecognizer?
     private var dismissTap: UITapGestureRecognizer?
+    private var menuInteraction: UIEditMenuInteraction?
 
     private var handlePans: [UIPanGestureRecognizer] = []
 
@@ -80,8 +82,12 @@ final class LoomTextSelectionController: NSObject {
             // Touches on a handle reach the label through the responder
             // chain (plain UIViews forward touchesBegan) — they belong
             // to the pan, never to dismissal. A tap inside the selection
-            // is menu territory (Task 17); anywhere else dismisses.
-            if !selectionContains(point), !handleHitTest(point) { clear() }
+            // re-summons the menu; anywhere else dismisses.
+            if selectionContains(point) {
+                presentMenu()
+            } else if !handleHitTest(point) {
+                clear()
+            }
             return true
         }
         guard label.textLayout != nil else { return false }
@@ -136,6 +142,7 @@ final class LoomTextSelectionController: NSObject {
         selectedRange = range
         observeEnclosingScrollView()
         installDismissTap()
+        presentMenu()
     }
 
     func selectAll() {
@@ -146,6 +153,20 @@ final class LoomTextSelectionController: NSObject {
         selectedRange = range
         observeEnclosingScrollView()
         installDismissTap()
+        presentMenu()
+    }
+
+    /// Where copied text lands. Test seam: touching
+    /// `UIPasteboard.general` inside a scene-less unit-test host hangs
+    /// on the pasteboard service, so tests swap in a capture closure.
+    var copySink: (String) -> Void = { UIPasteboard.general.string = $0 }
+
+    /// Copies the selection as plain text and dismisses it (chat-app
+    /// convention: copy ends the interaction).
+    func copySelection() {
+        guard let layout = label.textLayout, let range = selectedRange else { return }
+        copySink(layout.plainText(in: range))
+        clear()
     }
 
     func clear() {
@@ -153,7 +174,9 @@ final class LoomTextSelectionController: NSObject {
         dragAnchor = nil
         unobserveScrollView()
         removeDismissTap()
+        dismissMenu()
         selectedRange = nil
+        if label.isFirstResponder { label.resignFirstResponder() }
     }
 
     /// The backing layout was swapped — old indices are meaningless.
@@ -172,6 +195,7 @@ final class LoomTextSelectionController: NSObject {
     func beginHandleDrag(isStart: Bool) {
         guard let range = selectedRange else { return }
         dragAnchor = isStart ? range.location + range.length : range.location
+        dismissMenu()
     }
 
     func updateHandleDrag(to point: CGPoint) {
@@ -188,7 +212,9 @@ final class LoomTextSelectionController: NSObject {
     }
 
     func endHandleDrag() {
+        guard dragAnchor != nil else { return }
         dragAnchor = nil
+        presentMenu()
     }
 
     @objc private func handlePan(_ pan: UIPanGestureRecognizer) {
@@ -300,6 +326,59 @@ final class LoomTextSelectionController: NSObject {
         let point = tap.location(in: label)
         if !selectionContains(point), !handleHitTest(point) { clear() }
     }
+
+    // MARK: Edit menu
+
+    /// Presents the system edit menu anchored to the selection. The
+    /// label becomes first responder so `suggestedActions` picks up its
+    /// standard `copy:`/`selectAll:` commands — localized by UIKit for
+    /// free.
+    func presentMenu() {
+        // The windowScene guard matters twice over: menus can only host
+        // in a scene-backed window, and presentEditMenu against a
+        // scene-less window (unit-test hosts) hangs waiting on the UI
+        // service instead of failing.
+        guard isActive, let window = label.window, window.windowScene != nil else { return }
+        if menuInteraction == nil {
+            let interaction = UIEditMenuInteraction(delegate: self)
+            label.addInteraction(interaction)
+            menuInteraction = interaction
+        }
+        if !label.isFirstResponder { _ = label.becomeFirstResponder() }
+        let source = currentRects.first.map { CGPoint(x: $0.midX, y: $0.minY) } ?? .zero
+        menuInteraction?.presentEditMenu(
+            with: UIEditMenuConfiguration(identifier: "com.loomtext.selection", sourcePoint: source)
+        )
+    }
+
+    func dismissMenu() {
+        menuInteraction?.dismissMenu()
+    }
+}
+
+@available(iOS 16.0, *)
+extension LoomTextSelectionController: UIEditMenuInteractionDelegate {
+
+    func editMenuInteraction(
+        _ interaction: UIEditMenuInteraction,
+        menuFor configuration: UIEditMenuConfiguration,
+        suggestedActions: [UIMenuElement]
+    ) -> UIMenu? {
+        guard let range = selectedRange else { return nil }
+        var children = suggestedActions
+        if let extra = additionalMenuItems?(range), !extra.isEmpty {
+            children.append(UIMenu(options: .displayInline, children: extra))
+        }
+        return UIMenu(children: children)
+    }
+
+    func editMenuInteraction(
+        _ interaction: UIEditMenuInteraction,
+        targetRectFor configuration: UIEditMenuConfiguration
+    ) -> CGRect {
+        guard let range = selectedRange, let layout = label.textLayout else { return .null }
+        return layout.rect(for: range)
+    }
 }
 
 @available(iOS 16.0, *)
@@ -310,6 +389,24 @@ extension LoomTextSelectionController: UIGestureRecognizerDelegate {
         shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
     ) -> Bool {
         true
+    }
+
+    /// Taps on the edit menu itself must not reach the dismiss tap: the
+    /// tap recognizes before the menu button dispatches its action, and
+    /// clearing first guts `copySelection()` (its range is gone). The
+    /// class-name check is defensive UIKit-internals sniffing — if the
+    /// name ever changes, the cost is a benign extra dismissal, never
+    /// corruption.
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
+    ) -> Bool {
+        guard gestureRecognizer === dismissTap else { return true }
+        var ancestor = touch.view
+        while let view = ancestor {
+            if NSStringFromClass(type(of: view)).contains("EditMenu") { return false }
+            ancestor = view.superview
+        }
+        return true
     }
 }
 

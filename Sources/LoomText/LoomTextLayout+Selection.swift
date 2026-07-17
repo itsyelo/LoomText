@@ -92,6 +92,16 @@ extension LoomTextLayout {
         return normalizedSelectionRange(for: resolved)
     }
 
+    /// Plain text for the copy pipeline: the substring of `text` over
+    /// `range` (clamped to the string) with attachment placeholders
+    /// (U+FFFC) removed — an attachment has no textual equivalent yet.
+    public func plainText(in range: NSRange) -> String {
+        let plain = text.string as NSString
+        let bounded = NSIntersectionRange(range, NSRange(location: 0, length: plain.length))
+        guard bounded.length > 0 else { return "" }
+        return plain.substring(with: bounded).replacingOccurrences(of: "\u{FFFC}", with: "")
+    }
+
     /// Normalizes a candidate selection: intersects it with
     /// `selectableRange`, then expands both endpoints outward to
     /// grapheme-cluster boundaries so composed sequences (ZWJ emoji,

@@ -182,6 +182,37 @@ final class LoomSelectionGeometryTests: XCTestCase {
         )
     }
 
+    // MARK: - plainText (copy pipeline)
+
+    func testPlainTextSubstring() {
+        let l = layout("hello world")
+        XCTAssertEqual(l.plainText(in: NSRange(location: 6, length: 5)), "world")
+    }
+
+    func testPlainTextStripsAttachmentPlaceholder() {
+        let text = NSMutableAttributedString(attributedString: attr("pre "))
+        text.append(.loom_attachmentString(
+            content: NSNull(), contentSize: CGSize(width: 10, height: 10),
+            fontAscent: 12, fontDescent: 4
+        ))
+        text.append(attr(" post"))
+        let l = LoomTextLayout(containerSize: CGSize(width: 10_000, height: 10_000), text: text)!
+        let full = NSRange(location: 0, length: text.length)
+        XCTAssertEqual(l.plainText(in: full), "pre  post")
+    }
+
+    func testPlainTextClampsAndEmpty() {
+        let l = layout("abc")
+        XCTAssertEqual(l.plainText(in: NSRange(location: 1, length: 99)), "bc")
+        XCTAssertEqual(l.plainText(in: NSRange(location: 50, length: 5)), "")
+        XCTAssertEqual(l.plainText(in: NSRange(location: 0, length: 0)), "")
+    }
+
+    func testPlainTextKeepsEmojiIntact() {
+        let l = layout(familyString)
+        XCTAssertEqual(l.plainText(in: NSRange(location: 0, length: 13)), familyString)
+    }
+
     // MARK: - selectableRange & truncation
 
     func testSelectableRangeEqualsVisibleWithoutTruncation() {
