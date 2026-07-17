@@ -11,6 +11,8 @@ import CoreText
 import Foundation
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit // NSUnderlineStyle and the decoration attribute keys
 #endif
 
 extension LoomTextLayout {
@@ -42,6 +44,11 @@ extension LoomTextLayout {
         guard !lines.isEmpty else { return }
 
         drawRangeBackgrounds(in: context, point: point, cancel: cancel)
+        // YYText's decoration order: underline under the glyphs (a
+        // descender must not be cut by the line), strikethrough above.
+        if hasDecorations {
+            drawDecorations(.underline, in: context, point: point, cancel: cancel)
+        }
 
         context.saveGState()
         context.translateBy(x: point.x, y: point.y + size.height)
@@ -60,7 +67,110 @@ extension LoomTextLayout {
         }
         context.restoreGState()
 
+        if hasDecorations {
+            drawDecorations(.strikethrough, in: context, point: point, cancel: cancel)
+        }
         drawImageAttachments(in: context, point: point, cancel: cancel)
+    }
+
+    // MARK: - Decorations (Task 19)
+
+    private enum DecorationKind {
+        case underline
+        case strikethrough
+
+        var styleKey: NSAttributedString.Key {
+            self == .underline ? .underlineStyle : .strikethroughStyle
+        }
+
+        var colorKey: NSAttributedString.Key {
+            self == .underline ? .underlineColor : .strikethroughColor
+        }
+    }
+
+    /// Draws underline/strikethrough lines — CTLineDraw ignores both
+    /// (TextKit features, like `.backgroundColor`). Attributes are read
+    /// per glyph run, so the truncated line and a custom token carry
+    /// their own decorations without any string-index mapping. Style
+    /// subset: single / thick / double; pattern bits are ignored.
+    private func drawDecorations(
+        _ kind: DecorationKind,
+        in context: CGContext,
+        point: CGPoint,
+        cancel: (() -> Bool)?
+    ) {
+        context.saveGState()
+        context.translateBy(x: point.x, y: point.y)
+        for var line in lines {
+            if let cancel, cancel() { break }
+            if let truncatedLine, truncatedLine.index == line.index {
+                line = truncatedLine
+            }
+            let runs = CTLineGetGlyphRuns(line.ctLine)
+            for runIndex in 0..<CFArrayGetCount(runs) {
+                let run = unsafeBitCast(CFArrayGetValueAtIndex(runs, runIndex), to: CTRun.self)
+                guard let attributes = CTRunGetAttributes(run) as? [NSAttributedString.Key: Any],
+                    let styleRaw = (attributes[kind.styleKey] as? NSNumber)?.intValue,
+                    styleRaw != 0
+                else { continue }
+
+                var position = CGPoint.zero
+                CTRunGetPositions(run, CFRange(location: 0, length: 1), &position)
+                let width = CGFloat(CTRunGetTypographicBounds(run, CFRange(location: 0, length: 0), nil, nil, nil))
+                guard width > 0 else { continue }
+                let startX = line.position.x + position.x
+
+                let fontKey = NSAttributedString.Key(kCTFontAttributeName as String)
+                // swiftlint:disable:next force_cast
+                let font = attributes[fontKey].map { $0 as! CTFont }
+                    ?? CTFontCreateWithName("Helvetica" as CFString, 12, nil)
+                let thickness = max(CTFontGetUnderlineThickness(font), 0.5)
+                let centerY: CGFloat
+                switch kind {
+                case .underline:
+                    // Underline position is negative below the baseline.
+                    centerY = line.position.y - CTFontGetUnderlinePosition(font)
+                case .strikethrough:
+                    centerY = line.position.y - CTFontGetXHeight(font) / 2
+                }
+
+                let color = Self.cgColor(from: attributes[kind.colorKey])
+                    ?? Self.cgColor(from: attributes[.foregroundColor])
+                    ?? Self.cgColor(
+                        from: attributes[NSAttributedString.Key(kCTForegroundColorAttributeName as String)]
+                    )
+                    ?? CGColor(gray: 0, alpha: 1)
+                context.setFillColor(color)
+
+                func strokeLine(at y: CGFloat, thickness: CGFloat) {
+                    context.fill(CGRect(x: startX, y: y - thickness / 2, width: width, height: thickness))
+                }
+                switch styleRaw & 0x0F {
+                case NSUnderlineStyle.thick.rawValue:
+                    strokeLine(at: centerY, thickness: thickness * 2)
+                case NSUnderlineStyle.double.rawValue & 0x0F:
+                    strokeLine(at: centerY - thickness, thickness: thickness)
+                    strokeLine(at: centerY + thickness, thickness: thickness)
+                default:
+                    strokeLine(at: centerY, thickness: thickness)
+                }
+            }
+        }
+        context.restoreGState()
+    }
+
+    private static func cgColor(from value: Any?) -> CGColor? {
+        guard let value else { return nil }
+        #if canImport(UIKit)
+        if let color = value as? UIColor { return color.cgColor }
+        #elseif canImport(AppKit)
+        if let color = value as? NSColor { return color.cgColor }
+        #endif
+        if CFGetTypeID(value as CFTypeRef) == CGColor.typeID {
+            // swiftlint:disable:next force_cast
+            return (value as! CGColor)
+        }
+        return nil
     }
 
     /// Fills ``LoomTextBackground`` capsules behind their ranges, one
@@ -76,12 +186,30 @@ extension LoomTextLayout {
                 let boxed = rect.loomInset(by: background.insets).standardized
                 guard boxed.width > 0, boxed.height > 0 else { continue }
                 let radius = min(background.cornerRadius, min(boxed.width, boxed.height) / 2)
-                let path = CGPath(
-                    roundedRect: boxed, cornerWidth: radius, cornerHeight: radius, transform: nil
-                )
-                context.addPath(path)
-                context.setFillColor(background.fillColor)
-                context.fillPath()
+                if let fillColor = background.fillColor {
+                    let path = CGPath(
+                        roundedRect: boxed, cornerWidth: radius, cornerHeight: radius, transform: nil
+                    )
+                    context.addPath(path)
+                    context.setFillColor(fillColor)
+                    context.fillPath()
+                }
+                if let strokeColor = background.strokeColor, background.strokeWidth > 0 {
+                    // Inset by half the width so the stroke stays inside
+                    // the fragment box.
+                    let inset = background.strokeWidth / 2
+                    let strokeBox = boxed.insetBy(dx: inset, dy: inset)
+                    guard strokeBox.width > 0, strokeBox.height > 0 else { continue }
+                    let strokeRadius = max(0, min(radius - inset, min(strokeBox.width, strokeBox.height) / 2))
+                    let path = CGPath(
+                        roundedRect: strokeBox, cornerWidth: strokeRadius,
+                        cornerHeight: strokeRadius, transform: nil
+                    )
+                    context.addPath(path)
+                    context.setStrokeColor(strokeColor)
+                    context.setLineWidth(background.strokeWidth)
+                    context.strokePath()
+                }
             }
         }
 

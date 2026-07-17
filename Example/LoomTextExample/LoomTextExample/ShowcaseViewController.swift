@@ -131,6 +131,45 @@ final class ShowcaseViewController: UIViewController {
         )
         stack.addArrangedSubview(attachmentLabel)
 
+        // Card 3.5 — self-drawn decorations: underline, strikethrough,
+        // and an outlined topic tag (CTLineDraw renders none of these).
+        stack.addArrangedSubview(header("装饰线与边框：下划线、删除线、话题标签"))
+        let decorationLabel = LoomLabel()
+        let decoration = NSMutableAttributedString()
+        decoration.append(NSAttributedString(string: "带下划线的链接", attributes: [
+            .font: DemoText.bodyFont,
+            .foregroundColor: UIColor.systemBlue,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ]))
+        decoration.append(DemoText.body(" 原价 "))
+        decoration.append(NSAttributedString(string: "¥199", attributes: [
+            .font: DemoText.bodyFont,
+            .foregroundColor: UIColor.secondaryLabel,
+            .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+        ]))
+        decoration.append(DemoText.body(" 现价 ¥99，话题 "))
+        // Breathing room comes from negative insets, not spaces — a
+        // leading space could wrap alone and stroke an orphan fragment.
+        let topic = NSMutableAttributedString(string: "#LoomText", attributes: [
+            .font: DemoText.bodyFont,
+            .foregroundColor: UIColor.systemBlue,
+        ])
+        topic.loom_setBackground(
+            LoomTextBackground(
+                strokeColor: UIColor.systemBlue.cgColor,
+                strokeWidth: 1,
+                cornerRadius: 8,
+                insets: LoomEdgeInsets(top: -1, left: -4, bottom: -1, right: -4)
+            ),
+            range: NSRange(location: 0, length: topic.length)
+        )
+        decoration.append(topic)
+        decoration.append(DemoText.body(" 描边不填充。"))
+        decorationLabel.textLayout = LoomTextLayout(
+            containerSize: CGSize(width: width, height: 300), text: decoration
+        )
+        stack.addArrangedSubview(decorationLabel)
+
         // Card 4 — animated stickers (flavor A: memoized provider, so
         // animation state persists across re-displays).
         stack.addArrangedSubview(header("动态表情：真实网络 GIF，view attachment 独立动画"))

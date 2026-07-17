@@ -12,6 +12,11 @@
 import CoreGraphics
 import CoreText
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit // decoration attribute keys (.underlineStyle etc.)
+#endif
 
 /// An immutable text layout: the result of running CoreText over an
 /// attributed string within a ``LoomTextContainer``.
@@ -78,6 +83,10 @@ public final class LoomTextLayout: @unchecked Sendable {
     /// Frame of the token within `truncatedLine`, in container
     /// coordinates. Only computed for `.end` truncation.
     public let truncationTokenRect: CGRect?
+
+    /// Whether any run carries an underline or strikethrough — gates
+    /// the decoration passes so undecorated text pays nothing.
+    let hasDecorations: Bool
 
     /// Inline attachments across all *drawn* lines (the truncated line
     /// substitutes its original), with parallel ranges and frames.
@@ -258,6 +267,19 @@ public final class LoomTextLayout: @unchecked Sendable {
             }
         }
 
+        var hasDecorations = false
+        for key in [NSAttributedString.Key.underlineStyle, .strikethroughStyle] where !hasDecorations {
+            for probe in [textCopy, resolvedToken] {
+                guard let probe, probe.length > 0, !hasDecorations else { continue }
+                probe.enumerateAttribute(key, in: NSRange(location: 0, length: probe.length)) { value, _, stop in
+                    if let style = (value as? NSNumber)?.intValue, style != 0 {
+                        hasDecorations = true
+                        stop.pointee = true
+                    }
+                }
+            }
+        }
+
         var allAttachments: [LoomTextAttachment] = []
         var allAttachmentRanges: [NSRange] = []
         var allAttachmentRects: [CGRect] = []
@@ -272,6 +294,7 @@ public final class LoomTextLayout: @unchecked Sendable {
         self.rowCount = rowCount
         self.visibleRange = visibleRange
         self.selectableRange = selectableRange
+        self.hasDecorations = hasDecorations
         self.textBoundingRect = textBoundingRect
         self.textBoundingSize = boundingSize
         self.isTruncated = needTruncation

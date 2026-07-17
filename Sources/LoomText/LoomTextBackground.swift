@@ -3,42 +3,63 @@
 //  LoomText
 //
 //  Copyright (c) 2026 itsyelo. Licensed under the MIT license.
-//  The background-capsule subset of YYText's YYTextBorder.
+//  The background/border subset of YYText's YYTextBorder.
 //
 //  CoreText's CTLineDraw ignores NSAttributedString.backgroundColor —
 //  range backgrounds must be drawn by the layout. This attribute fills
-//  a rounded rect behind each line fragment of its range: mention
-//  capsules, pressed-state feedback, inline code chips.
+//  and/or strokes a rounded rect behind each line fragment of its
+//  range: mention capsules, pressed-state feedback, inline code chips,
+//  outlined topic tags.
 //
 
 import CoreGraphics
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 extension NSAttributedString.Key {
-    /// Fills a rounded background behind the range. Value: ``LoomTextBackground``.
+    /// Draws a rounded background behind the range. Value: ``LoomTextBackground``.
     public static let loomTextBackground = NSAttributedString.Key("LoomTextBackground")
 }
 
-/// A rounded fill drawn behind a text range, per line fragment.
+/// A rounded fill and/or stroke drawn behind a text range, per line
+/// fragment.
 ///
-/// `insets` shrink each fragment rect before filling; negative values
+/// `insets` shrink each fragment rect before drawing; negative values
 /// grow it (a breathing capsule). Growing draws outside the line box —
 /// keep within the label's padding or the capsule clips at its edges.
+/// The stroke is inset by half its width so it stays inside the box.
 public final class LoomTextBackground: @unchecked Sendable {
 
-    /// Fill color. `CGColor` is immutable and thread-safe; resolve
-    /// dynamic colors before constructing (pressed states are rebuilt
-    /// per appearance through the trait-aware pipeline).
-    public let fillColor: CGColor
+    /// Fill color, or `nil` for an outline-only background. `CGColor`
+    /// is immutable and thread-safe; resolve dynamic colors before
+    /// constructing (pressed states are rebuilt per appearance through
+    /// the trait-aware pipeline).
+    public let fillColor: CGColor?
+
+    /// Border color; `nil` draws no border.
+    public let strokeColor: CGColor?
+
+    /// Border width in points (only used when `strokeColor` is set).
+    public let strokeWidth: CGFloat
 
     /// Corner radius, clamped to half the fragment's smaller dimension.
     public let cornerRadius: CGFloat
 
-    /// Per-fragment insets applied before filling; negative grows.
+    /// Per-fragment insets applied before drawing; negative grows.
     public let insets: LoomEdgeInsets
 
-    public init(fillColor: CGColor, cornerRadius: CGFloat = 0, insets: LoomEdgeInsets = .zero) {
+    public init(
+        fillColor: CGColor? = nil,
+        strokeColor: CGColor? = nil,
+        strokeWidth: CGFloat = 1,
+        cornerRadius: CGFloat = 0,
+        insets: LoomEdgeInsets = .zero
+    ) {
         self.fillColor = fillColor
+        self.strokeColor = strokeColor
+        self.strokeWidth = strokeWidth
         self.cornerRadius = cornerRadius
         self.insets = insets
     }
