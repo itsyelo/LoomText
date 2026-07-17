@@ -27,8 +27,12 @@ extension NSAttributedString.Key {
 /// fragment.
 ///
 /// `insets` shrink each fragment rect before drawing; negative values
-/// grow it (a breathing capsule). Growing draws outside the line box —
-/// keep within the label's padding or the capsule clips at its edges.
+/// grow it (a breathing capsule). A grown capsule draws outside the
+/// line box, so give it room or it clips/collides:
+/// - horizontally and at the canvas edges: put matching insets on the
+///   ``LoomTextContainer`` — they grow the canvas, so nothing clips;
+/// - vertically between lines: add paragraph `lineSpacing`, or the
+///   capsule overlaps the previous line's ink (e.g. an underline).
 /// The stroke is inset by half its width so it stays inside the box.
 public final class LoomTextBackground: @unchecked Sendable {
 
