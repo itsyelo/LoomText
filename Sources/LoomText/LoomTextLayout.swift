@@ -51,12 +51,21 @@ public final class LoomTextLayout: @unchecked Sendable {
     /// Range of `text` visible in this layout.
     public let visibleRange: NSRange
 
-    /// The sub-range of `text` a user can visibly select. Equals
-    /// `visibleRange`, minus the last-line tail hidden behind an `.end`
-    /// truncation token (`visibleRange` keeps the full last-line range,
-    /// YYText parity — but those glyphs are not drawn). `.start`/`.middle`
-    /// truncation keeps `visibleRange` unchanged.
+    /// The envelope of ``selectableRanges`` — for `.end` truncation (and
+    /// untruncated text) the single visibly-selectable range: it excludes
+    /// the last-line tail hidden behind the token (`visibleRange` keeps
+    /// the full last-line range, YYText parity — but those glyphs are
+    /// not drawn). For `.start`/`.middle` the envelope contains the
+    /// hidden hole; geometry and copy exclude it via the spans.
     public let selectableRange: NSRange
+
+    /// The visibly-drawn spans of `text`, in order. One span for plain
+    /// and `.end`-truncated layouts; `.start`/`.middle` produce the
+    /// spans around the token's hole (mapped from the truncated line's
+    /// drawn runs, which for those types extend into the remainder of
+    /// the text). Selection geometry, copy, and normalization exclude
+    /// everything outside these spans.
+    public let selectableRanges: [NSRange]
 
     /// Union of line bounds, in container coordinates (insets included
     /// in position, not expanded).
@@ -274,6 +283,59 @@ public final class LoomTextLayout: @unchecked Sendable {
             }
         }
 
+        // .start/.middle hide a span *inside* the last line: the drawn
+        // spans come from the truncated line's non-token runs, whose
+        // indices are local to the extension text (the remainder, plus
+        // a prepended token for .start).
+        var selectableRanges = selectableRange.length > 0 ? [selectableRange] : []
+        if needTruncation,
+            container.truncationType == .start || container.truncationType == .middle,
+            let truncated = truncatedLine, let last = lines.last {
+            var spans: [NSRange] = []
+            if last.range.location > visibleRange.location {
+                spans.append(NSRange(
+                    location: visibleRange.location,
+                    length: last.range.location - visibleRange.location
+                ))
+            }
+            let base = last.range.location
+            let tokenShift = container.truncationType == .start ? (resolvedToken?.length ?? 0) : 0
+            let runs = CTLineGetGlyphRuns(truncated.ctLine)
+            for runIndex in 0..<CFArrayGetCount(runs) {
+                let run = unsafeBitCast(CFArrayGetValueAtIndex(runs, runIndex), to: CTRun.self)
+                guard let attributes = CTRunGetAttributes(run) as? [NSAttributedString.Key: Any],
+                    attributes[Self.tokenMarkerKey] == nil
+                else { continue }
+                let local = CTRunGetStringRange(run)
+                let location = base + local.location - tokenShift
+                guard location >= 0, location < textCopy.length else { continue }
+                spans.append(NSRange(
+                    location: location,
+                    length: min(local.length, textCopy.length - location)
+                ))
+            }
+            spans.sort { $0.location < $1.location }
+            var merged: [NSRange] = []
+            for span in spans where span.length > 0 {
+                if let lastSpan = merged.last,
+                    span.location <= lastSpan.location + lastSpan.length {
+                    let upper = max(lastSpan.location + lastSpan.length, span.location + span.length)
+                    merged[merged.count - 1] = NSRange(
+                        location: lastSpan.location, length: upper - lastSpan.location
+                    )
+                } else {
+                    merged.append(span)
+                }
+            }
+            if let first = merged.first, let lastSpan = merged.last {
+                selectableRanges = merged
+                selectableRange = NSRange(
+                    location: first.location,
+                    length: lastSpan.location + lastSpan.length - first.location
+                )
+            }
+        }
+
         var hasDecorations = false
         for key in [NSAttributedString.Key.underlineStyle, .strikethroughStyle] where !hasDecorations {
             for probe in [textCopy, resolvedToken] {
@@ -315,6 +377,7 @@ public final class LoomTextLayout: @unchecked Sendable {
         self.rowCount = rowCount
         self.visibleRange = visibleRange
         self.selectableRange = selectableRange
+        self.selectableRanges = selectableRanges
         self.hasDecorations = hasDecorations
         self.inkOverflow = inkOverflow
         self.textBoundingRect = textBoundingRect

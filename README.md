@@ -12,7 +12,7 @@ Sister library of [Loom](https://github.com/itsyelo/Loom): Loom calculates layou
 - **Custom truncation token** — attributed, tappable "… more"; collapsed and expanded prefixes are pixel-identical
 - **Highlights** — tappable / long-pressable ranges with a pressed state (`LoomTextHighlight`), including rounded capsule backgrounds and outlined tags (`LoomTextBackground`)
 - **Decorations** — self-drawn underline and strikethrough honoring the standard attributes (`CTLineDraw` renders neither), single/thick/double
-- **Text selection** (iOS 16+) — WeChat/Telegram-style read-only selection: long-press to select, draggable handles with grapheme snapping, system edit menu (Copy / Select All + custom items), loupe on iOS 17+ — all as an overlay, the async pipeline stays untouched
+- **Text selection** (iOS 16+) — WeChat/Telegram-style read-only selection: long-press to select, draggable handles with grapheme snapping, system edit menu (Copy / Select All + custom items), loupe on iOS 17+ — all as an overlay, the async pipeline stays untouched. Glyph-accurate for bidirectional text, and truncation-hole-aware: hidden spans neither highlight nor copy
 - **Attachments** — inline images, views, and layers via `CTRunDelegate`; mount/unmount hooks (`viewProvider` / `onViewUnmounted`) enable O(visible) view reuse pools for animated content
 - **Dynamic colors** — async bitmaps re-render on trait changes; dark mode just works
 - **Accessibility** — VoiceOver elements for text, links, and the truncation token
@@ -34,7 +34,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/itsyelo/LoomText.git", from: "0.2.0")
+    .package(url: "https://github.com/itsyelo/LoomText.git", from: "0.3.0")
 ]
 ```
 

@@ -27,11 +27,13 @@ extension NSEdgeInsets {
 ///
 /// All three token styles render, position their
 /// ``LoomTextLayout/truncationTokenRect``, and support token
-/// highlights/backgrounds/accessibility. One caveat: `.start` and
-/// `.middle` hide a span *inside* the last line, which a single
-/// `selectableRange` cannot express — selection and copy treat the
-/// whole `visibleRange` as selectable there (conservative superset;
-/// `.end` excludes its hidden tail exactly).
+/// highlights/backgrounds/accessibility. Selection and copy are
+/// hole-aware: the hidden span (`.end`'s tail, or the interior hole of
+/// `.start`/`.middle`) contributes no selection geometry and never
+/// copies — see ``LoomTextLayout/selectableRanges``. Hit-testing on
+/// the redrawn tail of `.start`/`.middle` remains approximate (the
+/// drawn glyphs come from the text's remainder while hit-testing keeps
+/// the original line, YYText parity).
 public enum LoomTextTruncationType: Sendable {
     case none
     case start

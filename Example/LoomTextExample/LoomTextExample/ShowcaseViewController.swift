@@ -213,8 +213,9 @@ final class ShowcaseViewController: UIViewController {
 
         // Card 5.5 — middle truncation, file-path style: head…tail of
         // the full text on a single line.
-        stack.addArrangedSubview(header("Middle 截断：路径省略（head…tail）"))
+        stack.addArrangedSubview(header("Middle 截断：路径省略（head…tail），长按选择复制不含洞"))
         let pathLabel = LoomLabel()
+        pathLabel.isTextSelectionEnabled = true
         pathLabel.textLayout = LoomTextLayout(
             container: LoomTextContainer(
                 size: CGSize(width: width, height: 40),

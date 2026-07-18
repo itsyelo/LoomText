@@ -140,12 +140,19 @@ final class LoomTruncationTokenTests: XCTestCase {
         }
     }
 
-    func testStartAndMiddleKeepConservativeSelectableRange() throws {
+    func testStartAndMiddleExposeVisibleSpans() throws {
         for type in [LoomTextTruncationType.start, .middle] {
             let layout = try truncatedLayout(token: makeToken(), type: type)
-            // Documented conservative superset: the hole inside the last
-            // line cannot be expressed by a single range.
-            XCTAssertEqual(layout.selectableRange, layout.visibleRange, "\(type)")
+            // Hole-aware (Task 23): spans cover the drawn text; the
+            // envelope spans first…last.
+            XCTAssertFalse(layout.selectableRanges.isEmpty, "\(type)")
+            let first = layout.selectableRanges.first!
+            let last = layout.selectableRanges.last!
+            XCTAssertEqual(layout.selectableRange.location, first.location, "\(type)")
+            XCTAssertEqual(
+                layout.selectableRange.location + layout.selectableRange.length,
+                last.location + last.length, "\(type)"
+            )
         }
     }
 

@@ -27,11 +27,16 @@ The async pipeline — background rasterization, sentinel cancellation,
 run-loop commit batching — is never involved: dragging at 60 Hz costs
 two shape-layer updates.
 
-Selection respects visibility: the tail hidden behind an `.end`
-truncation token is excluded (`LoomTextLayout/selectableRange`), so
-what gets copied is exactly what is on screen. Attachments copy as
-their ``LoomTextAttachment/altText`` (e.g. `"[表情]"`) — or are
-stripped when they provide none (`LoomTextLayout/plainText(in:)`).
+Selection respects visibility, including truncation holes: the tail
+hidden behind an `.end` token, and the interior span a `.start` or
+`.middle` token replaces, contribute no selection geometry and never
+copy (`LoomTextLayout/selectableRanges`) — dragging across a hole
+selects around it, and copy joins the visible head and tail.
+Attachments copy as their ``LoomTextAttachment/altText`` (e.g.
+`"[表情]"`) — or are stripped when they provide none
+(`LoomTextLayout/plainText(in:)`). Selection rects are glyph-accurate
+for bidirectional text: a range crossing an LTR↔RTL boundary
+highlights exactly its visual segments.
 
 ## Theming
 
