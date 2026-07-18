@@ -88,6 +88,13 @@ public final class LoomTextLayout: @unchecked Sendable {
     /// the decoration passes so undecorated text pays nothing.
     let hasDecorations: Bool
 
+    /// How far grown ``LoomTextBackground`` capsules (negative insets)
+    /// bleed past the layout box on each edge. `LoomLabel` renders this
+    /// margin on an overflow layer so edge capsules are never clipped —
+    /// the label's frame, text position, and `textBoundingSize` are all
+    /// unaffected. Zero when no background grows.
+    public let inkOverflow: LoomEdgeInsets
+
     /// Inline attachments across all *drawn* lines (the truncated line
     /// substitutes its original), with parallel ranges and frames.
     public let attachments: [LoomTextAttachment]
@@ -280,6 +287,20 @@ public final class LoomTextLayout: @unchecked Sendable {
             }
         }
 
+        var inkOverflow = LoomEdgeInsets.zero
+        for probe in [textCopy, resolvedToken] {
+            guard let probe, probe.length > 0 else { continue }
+            probe.enumerateAttribute(
+                .loomTextBackground, in: NSRange(location: 0, length: probe.length)
+            ) { value, _, _ in
+                guard let background = value as? LoomTextBackground else { return }
+                inkOverflow.top = max(inkOverflow.top, -background.insets.top)
+                inkOverflow.left = max(inkOverflow.left, -background.insets.left)
+                inkOverflow.bottom = max(inkOverflow.bottom, -background.insets.bottom)
+                inkOverflow.right = max(inkOverflow.right, -background.insets.right)
+            }
+        }
+
         var allAttachments: [LoomTextAttachment] = []
         var allAttachmentRanges: [NSRange] = []
         var allAttachmentRects: [CGRect] = []
@@ -295,6 +316,7 @@ public final class LoomTextLayout: @unchecked Sendable {
         self.visibleRange = visibleRange
         self.selectableRange = selectableRange
         self.hasDecorations = hasDecorations
+        self.inkOverflow = inkOverflow
         self.textBoundingRect = textBoundingRect
         self.textBoundingSize = boundingSize
         self.isTruncated = needTruncation

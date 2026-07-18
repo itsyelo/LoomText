@@ -80,6 +80,13 @@ public struct LoomTextContainer: @unchecked Sendable {
 
 // MARK: - Internal geometry helpers
 
+extension LoomEdgeInsets {
+    /// Cross-platform zero check (`NSEdgeInsets` is not `Equatable`).
+    var loomIsZero: Bool {
+        top == 0 && left == 0 && bottom == 0 && right == 0
+    }
+}
+
 extension CGRect {
     /// Cross-platform `inset(by:)` — shrinks by positive insets, grows by negative.
     func loomInset(by insets: LoomEdgeInsets) -> CGRect {

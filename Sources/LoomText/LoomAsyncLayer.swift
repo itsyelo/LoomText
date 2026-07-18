@@ -34,6 +34,14 @@ public struct LoomAsyncLayerDisplayTask {
     /// submission, not whatever the render thread defaults to.
     public var traitCollection: UITraitCollection?
 
+    /// Extra canvas beyond the layer bounds on each edge. Non-zero
+    /// values render onto an overflow sublayer that extends past the
+    /// layer, so ink bleeding out of the layout box (grown background
+    /// capsules) is not clipped. The `display` closure receives the
+    /// padded size and is responsible for drawing offset by
+    /// `(left, top)`.
+    public var inkOverflow: UIEdgeInsets = .zero
+
     public init() {}
 }
 
@@ -54,6 +62,48 @@ public final class LoomAsyncLayer: CALayer {
     public var displaysAsynchronously = true
 
     private let sentinel = LoomSentinel()
+
+    /// Hosts the bitmap when a pass has non-zero ink overflow: its
+    /// frame extends past the layer bounds so bleeding ink stays
+    /// visible. Inserted at index 0 — attachment views and selection
+    /// chrome stay above.
+    private(set) var inkLayer: CALayer?
+
+    /// Commits a rendered bitmap: to the layer itself for a plain pass,
+    /// to the overflow sublayer when ink bleeds; the unused surface is
+    /// always cleared.
+    @MainActor
+    private func commit(image: CGImage?, inkOverflow: UIEdgeInsets) {
+        if inkOverflow == .zero {
+            contents = image
+            inkLayer?.removeFromSuperlayer()
+            inkLayer = nil
+            return
+        }
+        contents = nil
+        let host: CALayer
+        if let inkLayer {
+            host = inkLayer
+        } else {
+            host = CALayer()
+            // The bitmap swaps wholesale each pass — implicit fades
+            // would smear scrolling content.
+            host.actions = [
+                "contents": NSNull(), "bounds": NSNull(),
+                "position": NSNull(), "hidden": NSNull(),
+            ]
+            insertSublayer(host, at: 0)
+            inkLayer = host
+        }
+        host.contentsScale = contentsScale
+        host.frame = CGRect(
+            x: -inkOverflow.left,
+            y: -inkOverflow.top,
+            width: bounds.width + inkOverflow.left + inkOverflow.right,
+            height: bounds.height + inkOverflow.top + inkOverflow.bottom
+        )
+        host.contents = image
+    }
 
     // MARK: - Render queue pool (YYTextAsyncLayerGetDisplayQueue)
 
@@ -114,12 +164,16 @@ public final class LoomAsyncLayer: CALayer {
 
         guard let display = task.display, bounds.width >= 1, bounds.height >= 1 else {
             task.willDisplay?(self)
-            contents = nil
+            commit(image: nil, inkOverflow: .zero)
             task.didDisplay?(self, true)
             return
         }
 
-        let size = bounds.size
+        let overflow = task.inkOverflow
+        let size = CGSize(
+            width: bounds.width + overflow.left + overflow.right,
+            height: bounds.height + overflow.top + overflow.bottom
+        )
         let opaque = isOpaque
         let format = UIGraphicsImageRendererFormat()
         format.scale = contentsScale
@@ -154,7 +208,7 @@ public final class LoomAsyncLayer: CALayer {
                     if isCancelled() || imageBox.value == nil {
                         taskBox.value.didDisplay?(layerBox.value, false)
                     } else {
-                        layerBox.value.contents = imageBox.value
+                        layerBox.value.commit(image: imageBox.value, inkOverflow: overflow)
                         taskBox.value.didDisplay?(layerBox.value, true)
                     }
                 }
@@ -166,7 +220,7 @@ public final class LoomAsyncLayer: CALayer {
                 size: size, format: format, opaque: opaque, background: background,
                 traits: traits, display: display, isCancelled: { false }
             )
-            contents = image?.cgImage
+            commit(image: image?.cgImage, inkOverflow: overflow)
             task.didDisplay?(self, true)
         }
     }

@@ -536,10 +536,19 @@ extension LoomLabel: LoomAsyncLayerDelegate {
         }
         guard let layout = pressedLayout ?? layoutStorage, !layout.lines.isEmpty else { return task }
         task.traitCollection = traitCollection
+        // Grown background capsules bleed past the layout box; the
+        // layer renders that margin on an overflow sublayer, and the
+        // draw shifts by (left, top) into the padded canvas.
+        let overflow = layout.inkOverflow
+        task.inkOverflow = overflow
         // The layout is immutable and Sendable — the whole point of the
         // pipeline: the render closure owns everything it needs.
         task.display = { context, size, isCancelled in
-            layout.draw(in: context, size: size, cancel: isCancelled)
+            layout.draw(
+                in: context, size: size,
+                point: CGPoint(x: overflow.left, y: overflow.top),
+                cancel: isCancelled
+            )
         }
         if !layout.attachments.isEmpty {
             task.didDisplay = { [weak self] _, finished in

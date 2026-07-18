@@ -165,9 +165,9 @@ final class ShowcaseViewController: UIViewController {
         )
         decoration.append(topic)
         decoration.append(DemoText.body(" 描边不填充。"))
-        // Grown capsules borrow inter-line space and bleed past the
-        // fragment box: line spacing keeps them off the previous line's
-        // underline, container insets grow the canvas so nothing clips.
+        // Grown capsules borrow inter-line space: line spacing keeps
+        // them off the previous line's underline. Edge bleed needs no
+        // setup — ink overflow renders it outside the label bounds.
         let decorationParagraph = NSMutableParagraphStyle()
         decorationParagraph.lineSpacing = 5
         decoration.addAttribute(
@@ -175,11 +175,7 @@ final class ShowcaseViewController: UIViewController {
             range: NSRange(location: 0, length: decoration.length)
         )
         decorationLabel.textLayout = LoomTextLayout(
-            container: LoomTextContainer(
-                size: CGSize(width: width, height: 300),
-                insets: LoomEdgeInsets(top: 2, left: 5, bottom: 3, right: 5)
-            ),
-            text: decoration
+            containerSize: CGSize(width: width, height: 300), text: decoration
         )
         stack.addArrangedSubview(decorationLabel)
 
