@@ -32,6 +32,13 @@ inside `performAsCurrent`, so dynamic colors resolve correctly off the
 main thread. Trait changes (dark mode) invalidate and re-render
 automatically.
 
+> Important: A custom `UIColor(dynamicProvider:)` is *resolved on the
+> render thread*. Under Swift 6, a provider closure created in a
+> `@MainActor` context is inferred MainActor-isolated and traps when
+> the async pipeline resolves it — mark it `@Sendable`:
+> `UIColor { @Sendable traits in … }`. System dynamic colors
+> (`.label`, `.systemBackground`, …) are unaffected.
+
 ## Attachments
 
 Image-content attachments draw into the bitmap. View and layer content

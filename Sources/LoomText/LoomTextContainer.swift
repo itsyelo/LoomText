@@ -25,9 +25,13 @@ extension NSEdgeInsets {
 
 /// How the last visible line ends when text does not fit the container.
 ///
-/// Only `.end` is rendered with a token (Task 08); `.start` and `.middle`
-/// are reserved for API compatibility and currently behave like `.end`
-/// for truncation detection.
+/// All three token styles render, position their
+/// ``LoomTextLayout/truncationTokenRect``, and support token
+/// highlights/backgrounds/accessibility. One caveat: `.start` and
+/// `.middle` hide a span *inside* the last line, which a single
+/// `selectableRange` cannot express — selection and copy treat the
+/// whole `visibleRange` as selectable there (conservative superset;
+/// `.end` excludes its hidden tail exactly).
 public enum LoomTextTruncationType: Sendable {
     case none
     case start

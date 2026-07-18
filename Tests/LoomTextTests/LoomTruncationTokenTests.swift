@@ -99,6 +99,56 @@ final class LoomTruncationTokenTests: XCTestCase {
         XCTAssertNil(layout.truncationTokenRect)
     }
 
+    // MARK: - .start / .middle (Task 21)
+
+    func testStartTruncationPlacesTokenAtLineStart() throws {
+        let layout = try truncatedLayout(token: makeToken(), type: .start)
+        XCTAssertTrue(layout.isTruncated)
+        XCTAssertNotNil(layout.truncatedLine)
+        let rect = try XCTUnwrap(layout.truncationTokenRect)
+        let line = try XCTUnwrap(layout.truncatedLine)
+        XCTAssertGreaterThan(rect.width, 0)
+        // The token leads the line: its left edge sits at the line's
+        // drawing origin, well before the horizontal middle.
+        XCTAssertEqual(rect.minX, line.position.x, accuracy: 2)
+        XCTAssertLessThan(rect.maxX, 75)
+    }
+
+    func testMiddleTruncationPlacesTokenInsideTheLine() throws {
+        let layout = try truncatedLayout(token: makeToken(), type: .middle)
+        XCTAssertTrue(layout.isTruncated)
+        let rect = try XCTUnwrap(layout.truncationTokenRect)
+        let line = try XCTUnwrap(layout.truncatedLine)
+        XCTAssertGreaterThan(rect.width, 0)
+        // Strictly interior: text on both sides of the token.
+        XCTAssertGreaterThan(rect.minX, line.position.x + 5)
+        XCTAssertLessThan(rect.maxX, line.position.x + line.lineWidth - 5)
+    }
+
+    func testTokenHighlightHitTestsForStartAndMiddle() throws {
+        for type in [LoomTextTruncationType.start, .middle] {
+            let layout = try truncatedLayout(token: makeToken(highlighted: true), type: type)
+            let rect = try XCTUnwrap(layout.truncationTokenRect, "\(type)")
+            let hit = layout.truncationTokenHighlight(
+                at: CGPoint(x: rect.midX, y: rect.midY)
+            )
+            XCTAssertNotNil(hit, "token tap must hit for \(type)")
+            // Just outside the rect: no hit.
+            XCTAssertNil(layout.truncationTokenHighlight(
+                at: CGPoint(x: rect.maxX + 10, y: rect.midY)
+            ), "miss must stay a miss for \(type)")
+        }
+    }
+
+    func testStartAndMiddleKeepConservativeSelectableRange() throws {
+        for type in [LoomTextTruncationType.start, .middle] {
+            let layout = try truncatedLayout(token: makeToken(), type: type)
+            // Documented conservative superset: the hole inside the last
+            // line cannot be expressed by a single range.
+            XCTAssertEqual(layout.selectableRange, layout.visibleRange, "\(type)")
+        }
+    }
+
     func testOversizedTokenDoesNotCrash() throws {
         let huge = makeToken(String(repeating: "wide token ", count: 20))
         let layout = try truncatedLayout(token: huge)

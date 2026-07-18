@@ -125,7 +125,7 @@ public final class LoomAsyncLayer: CALayer {
 
     public override init() {
         super.init()
-        contentsScale = UIScreen.main.scale
+        contentsScale = Self.mainScreenScale()
     }
 
     public override init(layer: Any) {
@@ -134,7 +134,14 @@ public final class LoomAsyncLayer: CALayer {
 
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
-        contentsScale = UIScreen.main.scale
+        contentsScale = Self.mainScreenScale()
+    }
+
+    /// CALayer inits are nonisolated, but a view's backing layer is
+    /// only ever created on the main thread — assume it to read the
+    /// MainActor-isolated screen scale (didMoveToWindow refines it).
+    private static func mainScreenScale() -> CGFloat {
+        MainActor.assumeIsolated { UIScreen.main.scale }
     }
 
     deinit {
@@ -149,11 +156,13 @@ public final class LoomAsyncLayer: CALayer {
     }
 
     public override func display() {
+        super.contents = super.contents
         // CALayer.display() is invoked by Core Animation on the main
-        // thread; CALayer itself carries no actor annotation.
+        // thread; CALayer carries no actor annotation, so self crosses
+        // into the MainActor region through the usual box.
+        let boxed = UncheckedSendableBox(self)
         MainActor.assumeIsolated {
-            super.contents = super.contents
-            displayContent(async: displaysAsynchronously)
+            boxed.value.displayContent(async: boxed.value.displaysAsynchronously)
         }
     }
 

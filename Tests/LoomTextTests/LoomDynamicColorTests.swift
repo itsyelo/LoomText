@@ -28,8 +28,12 @@ final class LoomDynamicColorTests: XCTestCase {
     }
 
     /// Red in light mode, green in dark mode — unambiguous per-pixel.
+    /// The provider MUST be @Sendable: the async pipeline resolves
+    /// dynamic colors on a render thread, and Swift 6 would otherwise
+    /// infer MainActor isolation from the test class and trap at
+    /// resolution time. The same rule applies to library users.
     private var dynamicColor: UIColor {
-        UIColor { traits in
+        UIColor { @Sendable traits in
             traits.userInterfaceStyle == .dark ? .green : .red
         }
     }

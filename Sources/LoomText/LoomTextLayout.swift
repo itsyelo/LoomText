@@ -372,7 +372,17 @@ public final class LoomTextLayout: @unchecked Sendable {
             resolvedToken = NSAttributedString(string: "\u{2026}", attributes: attributes)
         }
 
-        let tokenLine = CTLineCreateWithAttributedString(resolvedToken as CFAttributedString)
+        // The token instances fed to CoreText carry a private marker so
+        // the token's runs can be found again inside the truncated line
+        // — that locates the token rect for every truncation type. The
+        // public resolvedTruncationToken stays clean.
+        guard let markedToken = resolvedToken.mutableCopy() as? NSMutableAttributedString
+        else { return nil }
+        markedToken.addAttribute(
+            Self.tokenMarkerKey, value: true,
+            range: NSRange(location: 0, length: markedToken.length)
+        )
+        let tokenLine = CTLineCreateWithAttributedString(markedToken as CFAttributedString)
 
         let ctTruncationType: CTLineTruncationType
         switch type {
@@ -381,10 +391,34 @@ public final class LoomTextLayout: @unchecked Sendable {
         default: ctTruncationType = .end
         }
 
-        guard let extendedText = text.attributedSubstring(from: lastLine.range).mutableCopy()
+        // .end extends with the last line's own text (visual result: the
+        // line's prefix plus the token — pinned by tests). .start and
+        // .middle extend with the whole remainder of the text, so the
+        // token means "…the text continues": a `.start` path shows the
+        // path's tail, `.middle` shows head…tail. The token is appended
+        // for .end, prepended for .start, and inserted by CoreText
+        // itself for .middle — extending it here would draw it twice.
+        let sourceRange: NSRange
+        switch type {
+        case .start, .middle:
+            sourceRange = NSRange(
+                location: lastLine.range.location,
+                length: text.length - lastLine.range.location
+            )
+        default:
+            sourceRange = lastLine.range
+        }
+        guard let extendedText = text.attributedSubstring(from: sourceRange).mutableCopy()
             as? NSMutableAttributedString
         else { return nil }
-        extendedText.append(resolvedToken)
+        switch type {
+        case .end:
+            extendedText.append(markedToken)
+        case .start:
+            extendedText.insert(markedToken, at: 0)
+        default:
+            break
+        }
         let extendedLine = CTLineCreateWithAttributedString(extendedText as CFAttributedString)
 
         guard let ctTruncated = CTLineCreateTruncatedLine(extendedLine, Double(width), ctTruncationType, tokenLine)
@@ -398,21 +432,42 @@ public final class LoomTextLayout: @unchecked Sendable {
         )
 
         var tokenRect: CGRect?
-        if type == .end {
-            var tokenAscent: CGFloat = 0
-            var tokenDescent: CGFloat = 0
-            let tokenWidth = CGFloat(CTLineGetTypographicBounds(tokenLine, &tokenAscent, &tokenDescent, nil))
-            if tokenWidth > 0 {
-                tokenRect = CGRect(
-                    x: line.position.x + line.lineWidth - line.trailingWhitespaceWidth - tokenWidth,
-                    y: line.position.y - tokenAscent,
-                    width: tokenWidth,
-                    height: tokenAscent + tokenDescent
-                )
-            }
+        var tokenMinX = CGFloat.greatestFiniteMagnitude
+        var tokenMaxX = -CGFloat.greatestFiniteMagnitude
+        var tokenAscent: CGFloat = 0
+        var tokenDescent: CGFloat = 0
+        let runs = CTLineGetGlyphRuns(ctTruncated)
+        for runIndex in 0..<CFArrayGetCount(runs) {
+            let run = unsafeBitCast(CFArrayGetValueAtIndex(runs, runIndex), to: CTRun.self)
+            guard let attributes = CTRunGetAttributes(run) as? [NSAttributedString.Key: Any],
+                attributes[Self.tokenMarkerKey] != nil
+            else { continue }
+            var ascent: CGFloat = 0
+            var descent: CGFloat = 0
+            let runWidth = CGFloat(
+                CTRunGetTypographicBounds(run, CFRange(location: 0, length: 0), &ascent, &descent, nil)
+            )
+            var position = CGPoint.zero
+            CTRunGetPositions(run, CFRange(location: 0, length: 1), &position)
+            tokenMinX = min(tokenMinX, position.x)
+            tokenMaxX = max(tokenMaxX, position.x + runWidth)
+            tokenAscent = max(tokenAscent, ascent)
+            tokenDescent = max(tokenDescent, descent)
+        }
+        if tokenMaxX > tokenMinX {
+            tokenRect = CGRect(
+                x: line.position.x + tokenMinX,
+                y: line.position.y - tokenAscent,
+                width: tokenMaxX - tokenMinX,
+                height: tokenAscent + tokenDescent
+            )
         }
         return (line, resolvedToken, tokenRect)
     }
+
+    /// Private attribute marking token runs inside CT lines — never
+    /// present on public attributed strings.
+    static let tokenMarkerKey = NSAttributedString.Key("LoomTruncationTokenMarker")
 
     // MARK: - Hit testing (minimal set — extended in Task 07)
 

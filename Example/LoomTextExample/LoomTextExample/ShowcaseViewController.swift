@@ -211,6 +211,22 @@ final class ShowcaseViewController: UIViewController {
         selectionLabel.selectionInitialRange = .word
         stack.addArrangedSubview(selectionLabel)
 
+        // Card 5.5 — middle truncation, file-path style: head…tail of
+        // the full text on a single line.
+        stack.addArrangedSubview(header("Middle 截断：路径省略（head…tail）"))
+        let pathLabel = LoomLabel()
+        pathLabel.textLayout = LoomTextLayout(
+            container: LoomTextContainer(
+                size: CGSize(width: width, height: 40),
+                maximumNumberOfRows: 1,
+                truncationType: .middle
+            ),
+            text: DemoText.body(
+                "/Users/yelo/Projects/LoomText/Sources/LoomText/LoomTextLayout+Drawing.swift"
+            )
+        )
+        stack.addArrangedSubview(pathLabel)
+
         // Card 6 — toggles.
         stack.addArrangedSubview(header("渲染开关"))
         stack.addArrangedSubview(toggleRow(title: "异步绘制（displaysAsynchronously）", isOn: true) {
