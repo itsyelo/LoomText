@@ -12,8 +12,17 @@ import Foundation
 extension LoomTextLayout {
 
     /// Per-line rectangles covering `range`, in container coordinates.
-    /// The building block for pressed-state geometry (Task 07) and
-    /// accessibility frames (Task 10).
+    /// The building block for pressed-state geometry (Task 07),
+    /// accessibility frames (Task 10), and the selection overlay.
+    ///
+    /// Glyph-accurate for bidirectional text (Task 22): each glyph run
+    /// contributes the horizontal span of its glyphs inside `range`, so
+    /// a logical range crossing an LTR↔RTL boundary yields the correct
+    /// discontiguous segments. Touching segments merge — a plain LTR
+    /// line still produces exactly one rect. Glyph positions/advances
+    /// are used instead of caret offsets to sidestep the bidi-boundary
+    /// caret ambiguity; a ligature glyph belongs to the range when its
+    /// first character does (YYText's approximation).
     public func selectionRects(for range: NSRange) -> [CGRect] {
         guard range.length > 0 else { return [] }
         let rangeEnd = range.location + range.length
@@ -23,14 +32,50 @@ extension LoomTextLayout {
             let start = max(range.location, line.range.location)
             let end = min(rangeEnd, lineEnd)
             guard start < end else { continue }
-            let startX = CTLineGetOffsetForStringIndex(line.ctLine, start, nil)
-            let endX = CTLineGetOffsetForStringIndex(line.ctLine, end, nil)
-            let minX = min(startX, endX) + line.position.x
-            let maxX = max(startX, endX) + line.position.x
-            guard maxX > minX else { continue }
-            rects.append(
-                CGRect(x: minX, y: line.bounds.minY, width: maxX - minX, height: line.bounds.height)
-            )
+
+            var segments: [CGRect] = []
+            let runs = CTLineGetGlyphRuns(line.ctLine)
+            for runIndex in 0..<CFArrayGetCount(runs) {
+                let run = unsafeBitCast(CFArrayGetValueAtIndex(runs, runIndex), to: CTRun.self)
+                let glyphCount = CTRunGetGlyphCount(run)
+                guard glyphCount > 0 else { continue }
+                let runRange = CTRunGetStringRange(run)
+                guard runRange.location < end, runRange.location + runRange.length > start
+                else { continue }
+
+                var indices = [CFIndex](repeating: 0, count: glyphCount)
+                var positions = [CGPoint](repeating: .zero, count: glyphCount)
+                var advances = [CGSize](repeating: .zero, count: glyphCount)
+                let whole = CFRange(location: 0, length: glyphCount)
+                CTRunGetStringIndices(run, whole, &indices)
+                CTRunGetPositions(run, whole, &positions)
+                CTRunGetAdvances(run, whole, &advances)
+
+                var minX = CGFloat.greatestFiniteMagnitude
+                var maxX = -CGFloat.greatestFiniteMagnitude
+                for glyph in 0..<glyphCount where indices[glyph] >= start && indices[glyph] < end {
+                    minX = min(minX, positions[glyph].x)
+                    maxX = max(maxX, positions[glyph].x + advances[glyph].width)
+                }
+                guard maxX > minX else { continue }
+                segments.append(CGRect(
+                    x: line.position.x + minX,
+                    y: line.bounds.minY,
+                    width: maxX - minX,
+                    height: line.bounds.height
+                ))
+            }
+
+            segments.sort { $0.minX < $1.minX }
+            var merged: [CGRect] = []
+            for segment in segments {
+                if let last = merged.last, segment.minX <= last.maxX + 0.5 {
+                    merged[merged.count - 1] = last.union(segment)
+                } else {
+                    merged.append(segment)
+                }
+            }
+            rects.append(contentsOf: merged)
         }
         return rects
     }
