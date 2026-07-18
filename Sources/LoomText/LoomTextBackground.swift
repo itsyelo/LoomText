@@ -27,14 +27,21 @@ extension NSAttributedString.Key {
 /// fragment.
 ///
 /// `insets` shrink each fragment rect before drawing; negative values
-/// grow it (a breathing capsule). A grown capsule draws outside the
-/// line box:
-/// - at the layout's edges this just works — ``LoomLabel`` renders the
-///   bleed on an overflow layer (``LoomTextLayout/inkOverflow``), so
-///   nothing clips and the label's frame/alignment are untouched;
-/// - vertically between lines, add paragraph `lineSpacing`, or the
-///   capsule overlaps the previous line's ink (e.g. an underline).
-/// The stroke is inset by half its width so it stays inside the box.
+/// grow it (a breathing capsule). Growth is ink, not layout — adjacent
+/// glyphs are not pushed away — so keep negative insets to vertical
+/// breathing (±1–2pt) and give a chip its horizontal room in the text
+/// itself, where it participates in typesetting:
+/// - **padding** (inside the border): begin and end the styled range
+///   with a no-break space (`"\u{00A0}"`) — it widens the fragment box
+///   and can never wrap into an orphan fragment;
+/// - **margin** (between border and neighbors): plain spaces outside
+///   the range.
+/// A grown capsule that bleeds past the layout's edges just works —
+/// ``LoomLabel`` renders it on an overflow layer
+/// (``LoomTextLayout/inkOverflow``), leaving frame and alignment
+/// untouched. Between lines, add paragraph `lineSpacing` or the growth
+/// overlaps the previous line's ink. The stroke is inset by half its
+/// width so it stays inside the box.
 public final class LoomTextBackground: @unchecked Sendable {
 
     /// Fill color, or `nil` for an outline-only background. `CGColor`

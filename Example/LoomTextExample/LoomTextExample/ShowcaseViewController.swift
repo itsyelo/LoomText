@@ -148,9 +148,12 @@ final class ShowcaseViewController: UIViewController {
             .strikethroughStyle: NSUnderlineStyle.single.rawValue,
         ]))
         decoration.append(DemoText.body(" 现价 ¥99，话题 "))
-        // Breathing room comes from negative insets, not spaces — a
-        // leading space could wrap alone and stroke an orphan fragment.
-        let topic = NSMutableAttributedString(string: "#LoomText", attributes: [
+        // Chip spacing recipe — each layer typesets:
+        // outer regular spaces (in the neighbor strings) = margin;
+        // inner NBSPs = padding inside the border, non-breaking so the
+        // pad never wraps into an orphan fragment;
+        // negative insets stay vertical-only (breathing, not layout).
+        let topic = NSMutableAttributedString(string: "\u{00A0}#LoomText\u{00A0}", attributes: [
             .font: DemoText.bodyFont,
             .foregroundColor: UIColor.systemBlue,
         ])
@@ -159,7 +162,7 @@ final class ShowcaseViewController: UIViewController {
                 strokeColor: UIColor.systemBlue.cgColor,
                 strokeWidth: 1,
                 cornerRadius: 8,
-                insets: LoomEdgeInsets(top: -1, left: -4, bottom: -1, right: -4)
+                insets: LoomEdgeInsets(top: -1, left: 0, bottom: -1, right: 0)
             ),
             range: NSRange(location: 0, length: topic.length)
         )
